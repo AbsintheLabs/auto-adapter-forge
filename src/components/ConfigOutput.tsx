@@ -3,15 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink } from "lucide-react";
+import { DeploymentDialog } from "./DeploymentDialog";
+import { Copy } from "lucide-react";
 
 interface ConfigOutputProps {
   config: any;
   base64Config: string;
-  onDeploy?: () => void;
+  onDeploy?: (rpcUrl: string, redisUrl: string, templateId?: string) => Promise<void>;
+  isDeploying?: boolean;
 }
 
-export const ConfigOutput = ({ config, base64Config, onDeploy }: ConfigOutputProps) => {
+export const ConfigOutput = ({ config, base64Config, onDeploy, isDeploying = false }: ConfigOutputProps) => {
   const { toast } = useToast();
   const [copied, setCopied] = useState<"json" | "base64" | null>(null);
 
@@ -72,10 +74,7 @@ export const ConfigOutput = ({ config, base64Config, onDeploy }: ConfigOutputPro
       </Card>
 
       {onDeploy && (
-        <Button onClick={onDeploy} className="w-full" size="lg">
-          <ExternalLink className="mr-2 h-4 w-4" />
-          Deploy to Railway
-        </Button>
+        <DeploymentDialog onDeploy={onDeploy} isDeploying={isDeploying} />
       )}
     </div>
   );
