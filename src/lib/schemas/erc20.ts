@@ -17,7 +17,9 @@ export const erc20Schema = z.object({
   // Sink configuration
   csvPath: z.string().min(1, "CSV path is required").default("positions.csv"),
   enableStdout: z.boolean().default(true),
-  enableAbsinthe: z.boolean().default(false),
+  enableAbsinthe: z.boolean().default(true).refine((val) => val === true, {
+    message: "Absinthe sink must be enabled for ERC20 adapters",
+  }),
   
   // General configuration
   flushIntervalHours: z.number().min(1, "Flush interval must be at least 1 hour").default(1),

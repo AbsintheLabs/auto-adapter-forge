@@ -1,21 +1,107 @@
 import { z } from "zod";
+import { CHAIN_ID_TO_GATEWAY_URL } from "../chainMapping";
+
+// Schema for a single swap entry
+const swapEntrySchema = z.object({
+  poolAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address"),
+  swapLegAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address"),
+  pricingKind: z.enum(["pegged", "coingecko"]),
+  usdPegValue: z.number().optional(),
+  coingeckoId: z.string().optional(),
+}).refine(
+  (data) => {
+    if (data.pricingKind === "pegged") {
+      return data.usdPegValue !== undefined && data.usdPegValue > 0;
+    }
+    if (data.pricingKind === "coingecko") {
+      return data.coingeckoId !== undefined && data.coingeckoId.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "USD peg value is required for pegged pricing, or CoinGecko ID for coingecko pricing",
+    path: ["pricingKind"],
+  }
+);
+
+// Schema for a single LP entry
+const lpEntrySchema = z.object({
+  poolAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address"),
+  token0PricingKind: z.enum(["pegged", "coingecko"]),
+  token0UsdPegValue: z.number().optional(),
+  token0CoingeckoId: z.string().optional(),
+  token1PricingKind: z.enum(["pegged", "coingecko"]),
+  token1UsdPegValue: z.number().optional(),
+  token1CoingeckoId: z.string().optional(),
+}).refine(
+  (data) => {
+    if (data.token0PricingKind === "pegged") {
+      if (data.token0UsdPegValue === undefined || data.token0UsdPegValue <= 0) return false;
+    }
+    if (data.token0PricingKind === "coingecko") {
+      if (!data.token0CoingeckoId || data.token0CoingeckoId.length === 0) return false;
+    }
+    if (data.token1PricingKind === "pegged") {
+      if (data.token1UsdPegValue === undefined || data.token1UsdPegValue <= 0) return false;
+    }
+    if (data.token1PricingKind === "coingecko") {
+      if (!data.token1CoingeckoId || data.token1CoingeckoId.length === 0) return false;
+    }
+    return true;
+  },
+  {
+    message: "Pricing configuration is required for both tokens",
+  }
+);
 
 export const univ2Schema = z.object({
-  poolAddress: z.string().min(1, "Pool address is required"),
-  token0: z.string().min(1, "Token 0 address is required"),
-  token1: z.string().min(1, "Token 1 address is required"),
-  chainId: z.number().min(1, "Chain ID is required"),
+  // Network configuration
+  chainId: z.number().min(1, "Chain ID is required").refine(
+    (chainId) => chainId in CHAIN_ID_TO_GATEWAY_URL,
+    { message: "Invalid chain ID. Please select a supported chain." }
+  ),
+  gatewayUrl: z.string().url("Gateway URL must be a valid URL").optional(),
+  rpcUrl: z.string().optional(),
+  finality: z.number().min(1, "Finality must be at least 1").default(75),
+  
+  // Range configuration
   fromBlock: z.number().min(0, "From block must be positive"),
-  pricing: z.array(z.string()).min(1, "At least one pricing ID is required"),
+  toBlock: z.number().optional(),
+  
+  // Sink configuration
+  csvPath: z.string().min(1, "CSV path is required").default("uniswap-v2.csv"),
+  enableStdout: z.boolean().default(false),
+  enableAbsinthe: z.boolean().default(true).refine((val) => val === true, {
+    message: "Absinthe sink must be enabled for Uniswap V2 adapters",
+  }),
+  
+  // General configuration
+  flushIntervalHours: z.number().min(1, "Flush interval must be at least 1 hour").default(2),
+  
+  // Swap entries (array)
+  swaps: z.array(swapEntrySchema).min(1, "At least one swap entry is required"),
+  
+  // LP entries (array)
+  lps: z.array(lpEntrySchema).min(1, "At least one LP entry is required"),
 });
 
 export type Univ2Config = z.infer<typeof univ2Schema>;
 
+// Field definitions for the form
 export const univ2Fields = [
-  { name: "poolAddress", label: "Pool Address", type: "text", placeholder: "0x..." },
-  { name: "token0", label: "Token 0 Address", type: "text", placeholder: "0x..." },
-  { name: "token1", label: "Token 1 Address", type: "text", placeholder: "0x..." },
-  { name: "chainId", label: "Chain ID", type: "number", placeholder: "1" },
-  { name: "fromBlock", label: "From Block", type: "number", placeholder: "0" },
-  { name: "pricing", label: "Pricing IDs (comma separated)", type: "text", placeholder: "price1,price2" },
+  // Network fields
+  { name: "chainId", label: "Chain", type: "select", options: [1, 137, 42161, 8453, 10, 43111, 1000, 56, 43114, 143] },
+  { name: "finality", label: "Finality", type: "number", placeholder: "75" },
+  
+  // Range fields
+  { name: "fromBlock", label: "From Block", type: "number", placeholder: "1451314" },
+  { name: "toBlock", label: "To Block (optional)", type: "number", placeholder: "2524976" },
+  
+  // Sink fields
+  { name: "csvPath", label: "CSV Output Path", type: "text", placeholder: "uniswap-v2.csv" },
+  { name: "enableStdout", label: "Enable Stdout Sink", type: "checkbox" },
+  { name: "enableAbsinthe", label: "Enable Absinthe Sink", type: "checkbox" },
+  
+  // General fields
+  { name: "flushIntervalHours", label: "Flush Interval (hours)", type: "number", placeholder: "2" },
 ] as const;

@@ -1,5 +1,5 @@
 import React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "./ui/button";
@@ -9,6 +9,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Checkbox } from "./ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { CHAIN_OPTIONS, getGatewayUrlForChainId } from "@/lib/chainMapping";
+import { FieldWithInfo } from "./FieldWithInfo";
+import { UniswapV2Form } from "./UniswapV2Form";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Info } from "lucide-react";
+import { FIELD_INFO } from "@/lib/fieldInfo";
+import { UniswapV2HelpModal } from "./UniswapV2HelpModal";
+import { ERC20HelpModal } from "./ERC20HelpModal";
 
 interface AdapterFormProps {
   adapterType: string;
@@ -25,18 +32,43 @@ interface AdapterFormProps {
 }
 
 export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }: AdapterFormProps) => {
+  const isUniswapV2 = adapterType.toLowerCase().includes("uniswap");
+  
+  const defaultValues: any = {
+    finality: 75,
+    csvPath: isUniswapV2 ? "uniswap-v2.csv" : "positions.csv",
+    enableStdout: !isUniswapV2,
+    enableAbsinthe: true, // Always true for both ERC20 and Uniswap V2
+    flushIntervalHours: isUniswapV2 ? 2 : 1,
+    chainId: undefined,
+    gatewayUrl: undefined,
+  };
+
+  if (!isUniswapV2) {
+    defaultValues.pricingKind = "pegged";
+  } else {
+    defaultValues.swaps = [
+      {
+        poolAddress: "",
+        swapLegAddress: "",
+        pricingKind: "coingecko",
+        coingeckoId: "",
+      },
+    ];
+    defaultValues.lps = [
+      {
+        poolAddress: "",
+        token0PricingKind: "coingecko",
+        token0CoingeckoId: "",
+        token1PricingKind: "coingecko",
+        token1CoingeckoId: "",
+      },
+    ];
+  }
+
   const form = useForm<any>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      finality: 75,
-      csvPath: "positions.csv",
-      enableStdout: true,
-      enableAbsinthe: true,
-      flushIntervalHours: 1,
-      pricingKind: "pegged" as const,
-      chainId: undefined,
-      gatewayUrl: undefined,
-    },
+    defaultValues,
   });
 
   const pricingKind = form.watch("pricingKind");
@@ -74,20 +106,26 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{adapterType} Configuration</CardTitle>
-        <CardDescription>Fill in the required fields for your adapter</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>{adapterType} Configuration</CardTitle>
+            <CardDescription>Fill in the required fields for your adapter</CardDescription>
+          </div>
+          {isUniswapV2 ? <UniswapV2HelpModal /> : <ERC20HelpModal />}
+        </div>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form 
-            onSubmit={form.handleSubmit(
-              handleSubmit,
-              (errors) => {
-                console.error("Form validation errors:", errors);
-              }
-            )} 
-            className="space-y-6"
-          >
+        <FormProvider {...form}>
+          <Form {...form}>
+            <form 
+              onSubmit={form.handleSubmit(
+                handleSubmit,
+                (errors) => {
+                  console.error("Form validation errors:", errors);
+                }
+              )} 
+              className="space-y-6"
+            >
             {/* Network Section */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Network Configuration</h3>
@@ -100,32 +138,33 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                   name={field.name}
                   render={({ field: formField }) => (
                     <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          const chainId = Number(value);
-                          formField.onChange(chainId);
-                          // Automatically set gatewayUrl
-                          const gatewayUrl = getGatewayUrlForChainId(chainId);
-                          if (gatewayUrl) {
-                            form.setValue("gatewayUrl", gatewayUrl);
-                          }
-                        }}
-                        value={formField.value?.toString()}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a chain" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {CHAIN_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value.toString()}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FieldWithInfo fieldName="chainId" label={field.label}>
+                        <Select
+                          onValueChange={(value) => {
+                            const chainId = Number(value);
+                            formField.onChange(chainId);
+                            // Automatically set gatewayUrl
+                            const gatewayUrl = getGatewayUrlForChainId(chainId);
+                            if (gatewayUrl) {
+                              form.setValue("gatewayUrl", gatewayUrl);
+                            }
+                          }}
+                          value={formField.value?.toString()}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a chain" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CHAIN_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value.toString()}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FieldWithInfo>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -140,18 +179,19 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                   name={field.name}
                   render={({ field: formField }) => (
                     <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                          onChange={(e) => {
-                            const value = field.type === "number" ? Number(e.target.value) : e.target.value;
-                            formField.onChange(value);
-                          }}
-                        />
-                      </FormControl>
+                      <FieldWithInfo fieldName="finality" label={field.label}>
+                        <FormControl>
+                          <Input
+                            type={field.type}
+                            placeholder={field.placeholder}
+                            {...formField}
+                            onChange={(e) => {
+                              const value = field.type === "number" ? Number(e.target.value) : e.target.value;
+                              formField.onChange(value);
+                            }}
+                          />
+                        </FormControl>
+                      </FieldWithInfo>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -169,20 +209,21 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                   name={field.name}
                   render={({ field: formField }) => (
                     <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                          onChange={(e) => {
-                            const value = field.type === "number" 
-                              ? (e.target.value === "" ? undefined : Number(e.target.value))
-                              : e.target.value;
-                            formField.onChange(value);
-                          }}
-                        />
-                      </FormControl>
+                      <FieldWithInfo fieldName={field.name} label={field.label}>
+                        <FormControl>
+                          <Input
+                            type={field.type}
+                            placeholder={field.placeholder}
+                            {...formField}
+                            onChange={(e) => {
+                              const value = field.type === "number" 
+                                ? (e.target.value === "" ? undefined : Number(e.target.value))
+                                : e.target.value;
+                              formField.onChange(value);
+                            }}
+                          />
+                        </FormControl>
+                      </FieldWithInfo>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -195,6 +236,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
               <h3 className="text-lg font-semibold">Output Sinks</h3>
               {fields.filter(f => ["csvPath", "enableStdout", "enableAbsinthe"].includes(f.name)).map((field) => {
                 if (field.type === "checkbox") {
+                  const isAbsintheRequired = field.name === "enableAbsinthe"; // Required for both adapters
                   return (
                     <FormField
                       key={field.name}
@@ -205,11 +247,35 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                           <FormControl>
                             <Checkbox
                               checked={formField.value}
-                              onCheckedChange={formField.onChange}
+                              onCheckedChange={isAbsintheRequired ? undefined : formField.onChange}
+                              disabled={isAbsintheRequired}
                             />
                           </FormControl>
                           <div className="space-y-1 leading-none">
-                            <FormLabel>{field.label}</FormLabel>
+                            <div className="flex items-center gap-2">
+                              <FormLabel>
+                                {field.label}
+                                {isAbsintheRequired && <span className="text-muted-foreground ml-1">(Required)</span>}
+                              </FormLabel>
+                              {FIELD_INFO[field.name] && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center justify-center rounded-full border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                                      >
+                                        <Info className="h-3.5 w-3.5" />
+                                        <span className="sr-only">Info</span>
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <p>{FIELD_INFO[field.name]}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
                           </div>
                         </FormItem>
                       )}
@@ -223,14 +289,15 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                     name={field.name}
                     render={({ field: formField }) => (
                       <FormItem>
-                        <FormLabel>{field.label}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type={field.type}
-                            placeholder={field.placeholder}
-                            {...formField}
-                          />
-                        </FormControl>
+                        <FieldWithInfo fieldName={field.name} label={field.label}>
+                          <FormControl>
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -249,18 +316,19 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                   name={field.name}
                   render={({ field: formField }) => (
                     <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                          onChange={(e) => {
-                            const value = e.target.value === "" ? undefined : Number(e.target.value);
-                            formField.onChange(value);
-                          }}
-                        />
-                      </FormControl>
+                      <FieldWithInfo fieldName="flushIntervalHours" label={field.label}>
+                        <FormControl>
+                          <Input
+                            type={field.type}
+                            placeholder={field.placeholder}
+                            {...formField}
+                            onChange={(e) => {
+                              const value = e.target.value === "" ? undefined : Number(e.target.value);
+                              formField.onChange(value);
+                            }}
+                          />
+                        </FormControl>
+                      </FieldWithInfo>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -269,124 +337,133 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
             </div>
 
             {/* Adapter Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Token Configuration</h3>
-              
-              {/* Token Contract Address */}
-              {fields.filter(f => f.name === "tokenContractAddress").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+            {!isUniswapV2 ? (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Token Configuration</h3>
+                
+                {/* Token Contract Address */}
+                {fields.filter(f => f.name === "tokenContractAddress").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="tokenContractAddress" label={field.label}>
+                          <FormControl>
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
 
-              {/* Pricing Kind */}
-              {fields.filter(f => f.name === "pricingKind").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          formField.onChange(value);
-                          // Clear conditional fields when switching pricing kind
-                          if (value === "pegged") {
-                            form.setValue("coingeckoId", undefined);
-                          } else {
-                            form.setValue("usdPegValue", undefined);
-                          }
-                        }} 
-                        defaultValue={formField.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={field.placeholder} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {field.options?.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+                {/* Pricing Kind */}
+                {fields.filter(f => f.name === "pricingKind").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="pricingKind" label={field.label}>
+                          <Select 
+                            onValueChange={(value) => {
+                              formField.onChange(value);
+                              // Clear conditional fields when switching pricing kind
+                              if (value === "pegged") {
+                                form.setValue("coingeckoId", undefined);
+                              } else {
+                                form.setValue("usdPegValue", undefined);
+                              }
+                            }} 
+                            defaultValue={formField.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={field.placeholder} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
 
-              {/* Conditional Pricing Fields */}
-              {pricingKind === "pegged" && fields.filter(f => f.name === "usdPegValue").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                          onChange={(e) => {
-                            const value = e.target.value === "" ? undefined : Number(e.target.value);
-                            formField.onChange(value);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+                {/* Conditional Pricing Fields */}
+                {pricingKind === "pegged" && fields.filter(f => f.name === "usdPegValue").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="usdPegValue" label={field.label}>
+                          <FormControl>
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                              onChange={(e) => {
+                                const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                formField.onChange(value);
+                              }}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
 
-              {pricingKind === "coingecko" && fields.filter(f => f.name === "coingeckoId").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FormLabel>{field.label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type={field.type}
-                          placeholder={field.placeholder}
-                          {...formField}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
-            </div>
+                {pricingKind === "coingecko" && fields.filter(f => f.name === "coingeckoId").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="coingeckoId" label={field.label}>
+                          <FormControl>
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+            ) : (
+              <UniswapV2Form />
+            )}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Generating..." : "Generate Config"}
             </Button>
           </form>
         </Form>
+        </FormProvider>
       </CardContent>
     </Card>
   );

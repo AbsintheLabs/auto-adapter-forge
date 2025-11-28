@@ -1,6 +1,6 @@
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Wallet } from "lucide-react";
+import { Wallet, TrendingUp } from "lucide-react";
 
 interface Template {
   id: string;
@@ -15,6 +15,12 @@ const TEMPLATES: Template[] = [
     name: "ERC20 Holdings",
     description: "Track ERC20 token holdings and positions",
     icon: <Wallet className="h-6 w-6" />,
+  },
+  {
+    id: "uniswap-v2",
+    name: "Uniswap V2",
+    description: "Track Uniswap V2 swaps and liquidity pool positions",
+    icon: <TrendingUp className="h-6 w-6" />,
   },
 ];
 

@@ -10,12 +10,15 @@ import {
   ADAPTER_TYPES, 
   erc20Schema,
   erc20Fields,
+  univ2Schema,
+  univ2Fields,
 } from "@/lib/schemas";
 import { Sparkles } from "lucide-react";
 
 // Map adapter types to their schemas and fields
 const ADAPTER_CONFIG = {
   erc20: { schema: erc20Schema, fields: erc20Fields },
+  "uniswap-v2": { schema: univ2Schema, fields: univ2Fields },
 };
 
 type Stage = "template" | "form" | "output";
@@ -40,7 +43,8 @@ const Index = () => {
 
     setIsGenerating(true);
     try {
-      const result = generateConfig(formData);
+      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2';
+      const result = generateConfig(formData, adapterType);
       setGeneratedConfig(result);
       setStage("output");
       toast({
