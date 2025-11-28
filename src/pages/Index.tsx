@@ -2,21 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AdapterForm } from "@/components/AdapterForm";
 import { ConfigOutput } from "@/components/ConfigOutput";
-import { NaturalLanguageInput } from "@/components/NaturalLanguageInput";
+import { TemplateSelection } from "@/components/TemplateSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { useToast } from "@/hooks/use-toast";
-import { classifyAdapter, generateConfig, deployToRailway, type ClassificationResult, type GenerateConfigResult } from "@/lib/api";
+import { generateConfig, type GenerateConfigResult } from "@/lib/api";
 import { 
   ADAPTER_TYPES, 
-  type AdapterType,
-  univ2Schema,
-  univ2Fields,
-  univ3Schema,
-  univ3Fields,
-  morphoSchema,
-  morphoFields,
-  printrSchema,
-  printrFields,
   erc20Schema,
   erc20Fields,
 } from "@/lib/schemas";
@@ -24,55 +15,32 @@ import { Sparkles } from "lucide-react";
 
 // Map adapter types to their schemas and fields
 const ADAPTER_CONFIG = {
-  univ2: { schema: univ2Schema, fields: univ2Fields },
-  univ3: { schema: univ3Schema, fields: univ3Fields },
-  morpho: { schema: morphoSchema, fields: morphoFields },
-  printr: { schema: printrSchema, fields: printrFields },
   erc20: { schema: erc20Schema, fields: erc20Fields },
 };
 
-type Stage = "input" | "form" | "output";
+type Stage = "template" | "form" | "output";
 
 const Index = () => {
-  const [stage, setStage] = useState<Stage>("input");
-  const [userInput, setUserInput] = useState("");
-  const [classification, setClassification] = useState<ClassificationResult | null>(null);
+  const [stage, setStage] = useState<Stage>("template");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [generatedConfig, setGeneratedConfig] = useState<GenerateConfigResult | null>(null);
-  const [isClassifying, setIsClassifying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const { toast } = useToast();
 
-  // Stage 1: Handle natural language input
-  const handleClassify = async (prompt: string) => {
-    setUserInput(prompt);
-    setIsClassifying(true);
-    try {
-      const result = await classifyAdapter(prompt);
-      setClassification(result);
-      setStage("form");
-      toast({
-        title: "Classification Successful",
-        description: `Detected: ${ADAPTER_TYPES[result.adapter as AdapterType]}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Classification Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsClassifying(false);
-    }
+  // Stage 1: Handle template selection
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    setStage("form");
   };
 
   // Stage 2: Handle form submission
-  const handleFormSubmit = async (formData: any) => {
-    if (!classification) return;
+  const handleFormSubmit = (formData: any) => {
+    if (!selectedTemplate) return;
 
     setIsGenerating(true);
     try {
-      const result = await generateConfig(classification.adapter, formData);
+      const result = generateConfig(formData);
       setGeneratedConfig(result);
       setStage("output");
       toast({
@@ -90,49 +58,20 @@ const Index = () => {
     }
   };
 
-  // Stage 3: Handle Railway deployment
-  const handleDeploy = async (rpcUrl: string, redisUrl: string, templateId?: string) => {
-    if (!generatedConfig) return;
-
-    setIsDeploying(true);
-    try {
-      const result = await deployToRailway(
-        generatedConfig.base64,
-        rpcUrl,
-        redisUrl,
-        templateId
-      );
-      
-      if (result.success) {
-        toast({
-          title: "Deployment Successful",
-          description: result.deploymentUrl 
-            ? `Deployed to: ${result.deploymentUrl}` 
-            : result.message,
-        });
-      } else {
-        toast({
-          title: "Deployment Info",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Deployment Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeploying(false);
-    }
+  // Stage 3: Handle Railway deployment (manual - no API call needed)
+  const handleDeploy = async (rpcUrl: string, absintheApiKey: string, coingeckoApiKey: string, templateId?: string) => {
+    // Deployment is now fully manual via Railway UI
+    // This function is kept for compatibility but doesn't need to do anything
+    toast({
+      title: "Ready for Deployment",
+      description: "Use the deployment dialog to copy your config and deploy manually on Railway",
+    });
   };
 
   // Reset to start over
   const handleReset = () => {
-    setStage("input");
-    setUserInput("");
-    setClassification(null);
+    setStage("template");
+    setSelectedTemplate(null);
     setGeneratedConfig(null);
   };
 
@@ -148,7 +87,7 @@ const Index = () => {
             Absinthe Adapter Config Generator
           </h1>
           <p className="text-lg text-muted-foreground">
-            AI-powered configuration generator for Absinthe adapters
+            Configure your Absinthe adapter templates
           </p>
         </div>
 
@@ -157,18 +96,18 @@ const Index = () => {
           <ProgressIndicator currentStage={stage} />
         </div>
 
-        {/* Stage 1: Natural Language Input */}
-        {stage === "input" && (
-          <NaturalLanguageInput onSubmit={handleClassify} isLoading={isClassifying} />
+        {/* Stage 1: Template Selection */}
+        {stage === "template" && (
+          <TemplateSelection onSelect={handleTemplateSelect} />
         )}
 
         {/* Stage 2: Form Configuration */}
-        {stage === "form" && classification && (
+        {stage === "form" && selectedTemplate && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold">
-                  {ADAPTER_TYPES[classification.adapter as AdapterType]}
+                  {ADAPTER_TYPES[selectedTemplate as keyof typeof ADAPTER_TYPES]}
                 </h2>
               </div>
               <Button variant="outline" onClick={handleReset}>
@@ -177,9 +116,9 @@ const Index = () => {
             </div>
             
             <AdapterForm
-              adapterType={ADAPTER_TYPES[classification.adapter as AdapterType]}
-              schema={ADAPTER_CONFIG[classification.adapter as AdapterType].schema}
-              fields={ADAPTER_CONFIG[classification.adapter as AdapterType].fields}
+              adapterType={ADAPTER_TYPES[selectedTemplate as keyof typeof ADAPTER_TYPES]}
+              schema={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].schema}
+              fields={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].fields}
               onSubmit={handleFormSubmit}
               isLoading={isGenerating}
             />

@@ -74,7 +74,7 @@ export const ConfigOutput = ({ config, base64Config, onDeploy, isDeploying = fal
       </Card>
 
       {onDeploy && (
-        <DeploymentDialog onDeploy={onDeploy} isDeploying={isDeploying} />
+        <DeploymentDialog base64Config={base64Config} onDeploy={onDeploy} isDeploying={isDeploying} />
       )}
     </div>
   );

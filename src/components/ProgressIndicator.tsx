@@ -1,13 +1,13 @@
 import { ArrowRight } from "lucide-react";
 
-type Stage = "input" | "form" | "output";
+type Stage = "template" | "form" | "output";
 
 interface ProgressIndicatorProps {
   currentStage: Stage;
 }
 
 const STAGES = [
-  { id: "input" as const, label: "Describe", number: 1 },
+  { id: "template" as const, label: "Template", number: 1 },
   { id: "form" as const, label: "Configure", number: 2 },
   { id: "output" as const, label: "Deploy", number: 3 },
 ];
