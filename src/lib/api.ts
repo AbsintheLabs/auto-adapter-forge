@@ -43,26 +43,21 @@ export function generateConfig(
   const rpcUrl = fields.rpcUrl || '${env:RPC_URL}';
 
   // Build sink configuration
+  // Always include CSV, Stdout, and Absinthe sinks (all required for all adapters)
   const sinks: Array<Record<string, unknown>> = [
     {
       sinkType: 'csv',
-      path: fields.csvPath,
+      path: fields.csvPath || (adapterType === 'uniswap-v2' ? 'uniswap-v2.csv' : 'positions.csv'),
     },
-  ];
-
-  if (fields.enableStdout) {
-    sinks.push({
+    {
       sinkType: 'stdout',
-    });
-  }
-
-  if (fields.enableAbsinthe) {
-    sinks.push({
+    },
+    {
       sinkType: 'absinthe',
       url: '${env:ABSINTHE_API_URL}',
       apiKey: '${env:ABSINTHE_API_KEY}',
-    });
-  }
+    },
+  ];
 
   // Build adapter-specific config
   let adapterConfig: Record<string, unknown>;
@@ -183,6 +178,42 @@ export function generateConfig(
   const base64Config = encodeConfigToBase64(config);
 
   return { config, base64: base64Config };
+}
+
+/**
+ * Deploy to Railway using the API
+ */
+export async function deployToRailway(
+  configBase64: string,
+  chainId: number,
+  templateId?: string
+): Promise<{ success: boolean; message: string; projectId?: string; workflowId?: string; projectUrl?: string; error?: string }> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/deploy-railway`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        configBase64, 
+        chainId,
+        templateId 
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to deploy to Railway');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Railway deployment error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to deploy to Railway");
+  }
 }
 
 /**

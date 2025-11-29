@@ -12,20 +12,21 @@ import { CHAIN_OPTIONS, getGatewayUrlForChainId } from "@/lib/chainMapping";
 import { FieldWithInfo } from "./FieldWithInfo";
 import { UniswapV2Form } from "./UniswapV2Form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, ChevronDown, ChevronUp } from "lucide-react";
 import { FIELD_INFO } from "@/lib/fieldInfo";
 import { UniswapV2HelpModal } from "./UniswapV2HelpModal";
 import { ERC20HelpModal } from "./ERC20HelpModal";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
 interface AdapterFormProps {
   adapterType: string;
-  schema: z.ZodObject<any>;
+  schema: z.ZodTypeAny;
   fields: readonly { 
     name: string; 
     label: string; 
     type: string; 
     placeholder?: string;
-    options?: string[];
+    options?: readonly (string | number)[] | string[];
   }[];
   onSubmit: (data: any) => void;
   isLoading?: boolean;
@@ -33,6 +34,14 @@ interface AdapterFormProps {
 
 export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }: AdapterFormProps) => {
   const isUniswapV2 = adapterType.toLowerCase().includes("uniswap");
+  
+  // Filter out sink-related fields that should never be shown in the UI
+  // These are handled automatically in the backend
+  const visibleFields = fields.filter(f => 
+    f.name !== "csvPath" && 
+    f.name !== "enableStdout" && 
+    f.name !== "enableAbsinthe"
+  );
   
   const defaultValues: any = {
     finality: 75,
@@ -73,6 +82,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
 
   const pricingKind = form.watch("pricingKind");
   const chainId = form.watch("chainId");
+  const [showAdvancedOptions, setShowAdvancedOptions] = React.useState(false);
 
   // Automatically set gatewayUrl when chainId changes
   React.useEffect(() => {
@@ -131,7 +141,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
               <h3 className="text-lg font-semibold">Network Configuration</h3>
               
               {/* Chain Selection */}
-              {fields.filter(f => f.name === "chainId").map((field) => (
+              {visibleFields.filter(f => f.name === "chainId").map((field) => (
                 <FormField
                   key={field.name}
                   control={form.control}
@@ -171,38 +181,12 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                 />
               ))}
 
-              {/* Finality */}
-              {fields.filter(f => f.name === "finality").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FieldWithInfo fieldName="finality" label={field.label}>
-                        <FormControl>
-                          <Input
-                            type={field.type}
-                            placeholder={field.placeholder}
-                            {...formField}
-                            onChange={(e) => {
-                              const value = field.type === "number" ? Number(e.target.value) : e.target.value;
-                              formField.onChange(value);
-                            }}
-                          />
-                        </FormControl>
-                      </FieldWithInfo>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
             </div>
 
             {/* Range Section */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Block Range</h3>
-              {fields.filter(f => ["fromBlock", "toBlock"].includes(f.name)).map((field) => (
+              {visibleFields.filter(f => f.name === "fromBlock").map((field) => (
                 <FormField
                   key={field.name}
                   control={form.control}
@@ -231,58 +215,50 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
               ))}
             </div>
 
-            {/* Sink Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Output Sinks</h3>
-              {fields.filter(f => ["csvPath", "enableStdout", "enableAbsinthe"].includes(f.name)).map((field) => {
-                if (field.type === "checkbox") {
-                  const isAbsintheRequired = field.name === "enableAbsinthe"; // Required for both adapters
-                  return (
-                    <FormField
-                      key={field.name}
-                      control={form.control}
-                      name={field.name}
-                      render={({ field: formField }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+
+            {/* Advanced Options - Collapsible */}
+            <div className="border-t pt-4">
+              <Collapsible open={showAdvancedOptions} onOpenChange={setShowAdvancedOptions}>
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between">
+                    <span className="font-semibold">Advanced Options</span>
+                    {showAdvancedOptions ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4">
+                {/* Finality */}
+                {visibleFields.filter(f => f.name === "finality").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="finality" label={field.label}>
                           <FormControl>
-                            <Checkbox
-                              checked={formField.value}
-                              onCheckedChange={isAbsintheRequired ? undefined : formField.onChange}
-                              disabled={isAbsintheRequired}
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                              onChange={(e) => {
+                                const value = field.type === "number" ? Number(e.target.value) : e.target.value;
+                                formField.onChange(value);
+                              }}
                             />
                           </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <div className="flex items-center gap-2">
-                              <FormLabel>
-                                {field.label}
-                                {isAbsintheRequired && <span className="text-muted-foreground ml-1">(Required)</span>}
-                              </FormLabel>
-                              {FIELD_INFO[field.name] && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className="inline-flex items-center justify-center rounded-full border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                                      >
-                                        <Info className="h-3.5 w-3.5" />
-                                        <span className="sr-only">Info</span>
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                      <p>{FIELD_INFO[field.name]}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                  );
-                }
-                return (
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+
+                {/* To Block */}
+                {visibleFields.filter(f => f.name === "toBlock").map((field) => (
                   <FormField
                     key={field.name}
                     control={form.control}
@@ -295,6 +271,12 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                               type={field.type}
                               placeholder={field.placeholder}
                               {...formField}
+                              onChange={(e) => {
+                                const value = field.type === "number" 
+                                  ? (e.target.value === "" ? undefined : Number(e.target.value))
+                                  : e.target.value;
+                                formField.onChange(value);
+                              }}
                             />
                           </FormControl>
                         </FieldWithInfo>
@@ -302,38 +284,36 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                       </FormItem>
                     )}
                   />
-                );
-              })}
-            </div>
+                ))}
 
-            {/* General Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">General Configuration</h3>
-              {fields.filter(f => f.name === "flushIntervalHours").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FieldWithInfo fieldName="flushIntervalHours" label={field.label}>
-                        <FormControl>
-                          <Input
-                            type={field.type}
-                            placeholder={field.placeholder}
-                            {...formField}
-                            onChange={(e) => {
-                              const value = e.target.value === "" ? undefined : Number(e.target.value);
-                              formField.onChange(value);
-                            }}
-                          />
-                        </FormControl>
-                      </FieldWithInfo>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+                {/* Flush Interval */}
+                {visibleFields.filter(f => f.name === "flushIntervalHours").map((field) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={field.name}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="flushIntervalHours" label={field.label}>
+                          <FormControl>
+                            <Input
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              {...formField}
+                              onChange={(e) => {
+                                const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                formField.onChange(value);
+                              }}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+                </CollapsibleContent>
+              </Collapsible>
             </div>
 
             {/* Adapter Configuration */}
@@ -342,7 +322,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                 <h3 className="text-lg font-semibold">Token Configuration</h3>
                 
                 {/* Token Contract Address */}
-                {fields.filter(f => f.name === "tokenContractAddress").map((field) => (
+                {visibleFields.filter(f => f.name === "tokenContractAddress").map((field) => (
                   <FormField
                     key={field.name}
                     control={form.control}
@@ -365,7 +345,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                 ))}
 
                 {/* Pricing Kind */}
-                {fields.filter(f => f.name === "pricingKind").map((field) => (
+                {visibleFields.filter(f => f.name === "pricingKind").map((field) => (
                   <FormField
                     key={field.name}
                     control={form.control}
@@ -406,7 +386,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                 ))}
 
                 {/* Conditional Pricing Fields */}
-                {pricingKind === "pegged" && fields.filter(f => f.name === "usdPegValue").map((field) => (
+                {pricingKind === "pegged" && visibleFields.filter(f => f.name === "usdPegValue").map((field) => (
                   <FormField
                     key={field.name}
                     control={form.control}
@@ -432,7 +412,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, isLoading }
                   />
                 ))}
 
-                {pricingKind === "coingecko" && fields.filter(f => f.name === "coingeckoId").map((field) => (
+                {pricingKind === "coingecko" && visibleFields.filter(f => f.name === "coingeckoId").map((field) => (
                   <FormField
                     key={field.name}
                     control={form.control}

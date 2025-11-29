@@ -13,9 +13,14 @@ interface ConfigOutputProps {
   isDeploying?: boolean;
 }
 
+function extractChainId(config: any): number | null {
+  return config?.network?.chainId || null;
+}
+
 export const ConfigOutput = ({ config, base64Config, onDeploy, isDeploying = false }: ConfigOutputProps) => {
   const { toast } = useToast();
   const [copied, setCopied] = useState<"json" | "base64" | null>(null);
+  const chainId = extractChainId(config);
 
   const copyToClipboard = async (text: string, type: "json" | "base64") => {
     await navigator.clipboard.writeText(text);
@@ -73,8 +78,8 @@ export const ConfigOutput = ({ config, base64Config, onDeploy, isDeploying = fal
         </CardContent>
       </Card>
 
-      {onDeploy && (
-        <DeploymentDialog base64Config={base64Config} onDeploy={onDeploy} isDeploying={isDeploying} />
+      {onDeploy && chainId && (
+        <DeploymentDialog base64Config={base64Config} chainId={chainId} onDeploy={onDeploy} isDeploying={isDeploying} />
       )}
     </div>
   );

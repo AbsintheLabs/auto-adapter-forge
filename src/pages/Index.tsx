@@ -5,7 +5,7 @@ import { ConfigOutput } from "@/components/ConfigOutput";
 import { TemplateSelection } from "@/components/TemplateSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { useToast } from "@/hooks/use-toast";
-import { generateConfig, type GenerateConfigResult } from "@/lib/api";
+import { generateConfig, deployToRailway, type GenerateConfigResult } from "@/lib/api";
 import { 
   ADAPTER_TYPES, 
   erc20Schema,
@@ -62,14 +62,51 @@ const Index = () => {
     }
   };
 
-  // Stage 3: Handle Railway deployment (manual - no API call needed)
+  // Stage 3: Handle Railway deployment
   const handleDeploy = async (rpcUrl: string, absintheApiKey: string, coingeckoApiKey: string, templateId?: string) => {
-    // Deployment is now fully manual via Railway UI
-    // This function is kept for compatibility but doesn't need to do anything
-    toast({
-      title: "Ready for Deployment",
-      description: "Use the deployment dialog to copy your config and deploy manually on Railway",
-    });
+    if (!generatedConfig) return;
+
+    setIsDeploying(true);
+    try {
+      // Extract chainId from the generated config
+      const chainId = generatedConfig.config?.network?.chainId;
+      if (!chainId) {
+        throw new Error("Chain ID not found in configuration");
+      }
+
+      const result = await deployToRailway(
+        generatedConfig.base64,
+        chainId,
+        templateId
+      );
+      
+      if (result.success) {
+        toast({
+          title: "Deployment Successful",
+          description: result.projectUrl 
+            ? `Project deployed! Click to view: ${result.projectUrl}`
+            : result.message || `Project ID: ${result.projectId}`,
+        });
+        // Open Railway project in new tab if URL is available
+        if (result.projectUrl) {
+          window.open(result.projectUrl, '_blank');
+        }
+      } else {
+        toast({
+          title: "Deployment Failed",
+          description: result.message || "Unknown error occurred",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Deployment Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   // Reset to start over
