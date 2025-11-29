@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import {
   Dialog,
@@ -12,18 +10,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
-import { ExternalLink, Loader2, Copy, Check } from "lucide-react";
+import { ExternalLink, Loader2, Copy, Check, Rocket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { deployToRailway } from "@/lib/api";
 
 interface DeploymentDialogProps {
   base64Config: string;
+  chainId: number;
   onDeploy?: (rpcUrl: string, absintheApiKey: string, coingeckoApiKey: string, templateId?: string) => Promise<void>;
   isDeploying?: boolean;
 }
 
-export const DeploymentDialog = ({ base64Config, onDeploy, isDeploying = false }: DeploymentDialogProps) => {
+export const DeploymentDialog = ({ base64Config, chainId, onDeploy, isDeploying = false }: DeploymentDialogProps) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isAutoDeploying, setIsAutoDeploying] = useState(false);
   const { toast } = useToast();
 
   const handleOpenRailway = () => {
@@ -40,8 +41,63 @@ export const DeploymentDialog = ({ base64Config, onDeploy, isDeploying = false }
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAutoDeploy = async () => {
+    setIsAutoDeploying(true);
+    try {
+      const result = await deployToRailway(
+        base64Config,
+        chainId,
+        undefined // Use default template ID from backend
+      );
+
+      if (result.success) {
+        toast({
+          title: "Deployment Successful!",
+          description: result.projectUrl 
+            ? `Project deployed! Click to view: ${result.projectUrl}`
+            : result.message || `Project ID: ${result.projectId}`,
+        });
+        // Open Railway project in new tab if URL is available
+        if (result.projectUrl) {
+          window.open(result.projectUrl, '_blank');
+        }
+      } else {
+        throw new Error(result.message || "Deployment failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Deployment Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAutoDeploying(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Automated Deployment - Direct deployment without modal */}
+      <Button 
+        className="w-full" 
+        size="lg" 
+        variant="default"
+        onClick={handleAutoDeploy}
+        disabled={isAutoDeploying || isDeploying}
+      >
+        {isAutoDeploying ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Deploying...
+          </>
+        ) : (
+          <>
+            <Rocket className="mr-2 h-4 w-4" />
+            Deploy to Railway (Automated)
+          </>
+        )}
+      </Button>
+
       {/* Manual Deployment Instructions */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>

@@ -62,21 +62,19 @@ export const univ2Schema = z.object({
   ),
   gatewayUrl: z.string().url("Gateway URL must be a valid URL").optional(),
   rpcUrl: z.string().optional(),
-  finality: z.number().min(1, "Finality must be at least 1").default(75),
+  finality: z.number().min(1, "Finality must be at least 1").optional().default(75),
   
   // Range configuration
   fromBlock: z.number().min(0, "From block must be positive"),
   toBlock: z.number().optional(),
   
-  // Sink configuration
-  csvPath: z.string().min(1, "CSV path is required").default("uniswap-v2.csv"),
-  enableStdout: z.boolean().default(false),
-  enableAbsinthe: z.boolean().default(true).refine((val) => val === true, {
-    message: "Absinthe sink must be enabled for Uniswap V2 adapters",
-  }),
+  // Sink configuration (handled automatically in backend)
+  csvPath: z.string().min(1, "CSV path is required").default("uniswap-v2.csv").optional(),
+  enableStdout: z.boolean().default(false).optional(),
+  enableAbsinthe: z.boolean().default(true).optional(),
   
   // General configuration
-  flushIntervalHours: z.number().min(1, "Flush interval must be at least 1 hour").default(2),
+  flushIntervalHours: z.number().min(1, "Flush interval must be at least 1 hour").optional().default(2),
   
   // Swap entries (array)
   swaps: z.array(swapEntrySchema).min(1, "At least one swap entry is required"),
@@ -91,17 +89,13 @@ export type Univ2Config = z.infer<typeof univ2Schema>;
 export const univ2Fields = [
   // Network fields
   { name: "chainId", label: "Chain", type: "select", options: [1, 137, 42161, 8453, 10, 43111, 1000, 56, 43114, 143] },
-  { name: "finality", label: "Finality", type: "number", placeholder: "75" },
+  { name: "finality", label: "Finality", type: "number", placeholder: "75" }, // In advanced options
   
   // Range fields
   { name: "fromBlock", label: "From Block", type: "number", placeholder: "1451314" },
-  { name: "toBlock", label: "To Block (optional)", type: "number", placeholder: "2524976" },
+  { name: "toBlock", label: "To Block (optional)", type: "number", placeholder: "2524976" }, // In advanced options
+  // Sink fields removed - handled automatically in backend
   
-  // Sink fields
-  { name: "csvPath", label: "CSV Output Path", type: "text", placeholder: "uniswap-v2.csv" },
-  { name: "enableStdout", label: "Enable Stdout Sink", type: "checkbox" },
-  { name: "enableAbsinthe", label: "Enable Absinthe Sink", type: "checkbox" },
-  
-  // General fields
+  // General fields (moved to advanced options)
   { name: "flushIntervalHours", label: "Flush Interval (hours)", type: "number", placeholder: "2" },
 ] as const;
