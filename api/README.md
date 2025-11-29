@@ -24,19 +24,42 @@ PORT=3001
 
 ## Running
 
-Development mode:
+### Development Mode
 ```bash
 npm run dev
 ```
 
-Build:
+### Production (Node.js)
 ```bash
 npm run build
+npm start
 ```
 
-Production:
+### Docker
+
+Build the Docker image:
 ```bash
-npm start
+docker build -t absinthe-adapter-api .
+```
+
+Run the container:
+```bash
+docker run -d \
+  -p 3002:3002 \
+  -e RAILWAY_API_TOKEN=your_token \
+  -e RAILWAY_WORKSPACE_ID=your_workspace_id \
+  -e RPC_API_KEY=your_infura_api_key \
+  -e ABSINTHE_API_KEY=your_absinthe_key \
+  -e COINGECKO_API_KEY=your_coingecko_key \
+  --name absinthe-api \
+  absinthe-adapter-api
+```
+
+### Docker Compose
+
+Create a `.env` file with your environment variables, then:
+```bash
+docker-compose up -d
 ```
 
 ## API Endpoints
@@ -49,6 +72,7 @@ Deploys an adapter configuration to Railway.
 ```json
 {
   "configBase64": "base64_encoded_config_string",
+  "chainId": 1,
   "templateId": "optional_template_id"
 }
 ```
@@ -69,10 +93,10 @@ Deploys an adapter configuration to Railway.
 
 - `RAILWAY_API_TOKEN` - Your Railway API token (required)
 - `RAILWAY_WORKSPACE_ID` - Your Railway workspace ID (required)
-- `RAILWAY_TEMPLATE_ID` - Railway template ID (optional, has default)
-- `RPC_URL` - RPC endpoint URL for the blockchain (required)
+- `RAILWAY_TEMPLATE_ID` - Railway template ID (optional, defaults to "e671e590-fec4-4beb-8044-37f013a351e9")
+- `RPC_API_KEY` - Your Infura API key (required). The RPC URL is automatically constructed based on the chain ID.
 - `ABSINTHE_API_KEY` - Your Absinthe API key (required)
 - `ABSINTHE_API_URL` - Absinthe API URL (optional, defaults to "https://v2.adapters.absinthe.network")
 - `COINGECKO_API_KEY` - Your CoinGecko API key (required)
-- `PORT` - Server port (default: 3001)
+- `PORT` - Server port (default: 3002)
 
