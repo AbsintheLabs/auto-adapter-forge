@@ -20,11 +20,27 @@ export const CHAIN_ID_TO_NAME: Record<number, string> = {
   8453: 'Base',
   10: 'Optimism',
   43111: 'Hemi',
-  1000: 'Solana',
   56: 'BSC',
   43114: 'Avalanche',
   143: 'Monad',
 };
+
+// Chains that are NOT available in Etherscan V2 free tier - require manual fromBlock input
+export const MANUAL_FROM_BLOCK_CHAINS = [
+  43114, // Avalanche C-Chain - Not Available
+  43113, // Avalanche Fuji Testnet - Not Available
+  8453,  // Base Mainnet - Not Available
+  84532, // Base Sepolia Testnet - Not Available
+  56,    // BNB Smart Chain Mainnet - Not Available
+  97,    // BNB Smart Chain Testnet - Not Available
+  10,    // OP Mainnet - Not Available
+  11155420, // OP Sepolia Testnet - Not Available
+  43111, // Hemi - Not in Etherscan V2 support list
+];
+
+// Chains that support automatic fromBlock lookup via Etherscan V2 API
+// All chains except those in MANUAL_FROM_BLOCK_CHAINS are supported
+export const SCAN_SUPPORTED_CHAINS = [1, 137, 42161, 143]; // Examples: Ethereum, Polygon, Arbitrum, Monad (most chains are supported)
 
 export const CHAIN_OPTIONS = Object.entries(CHAIN_ID_TO_NAME).map(([chainId, name]) => ({
   value: Number(chainId),

@@ -5,7 +5,7 @@ import { ConfigOutput } from "@/components/ConfigOutput";
 import { TemplateSelection } from "@/components/TemplateSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { useToast } from "@/hooks/use-toast";
-import { generateConfig, deployToRailway, type GenerateConfigResult } from "@/lib/api";
+import { generateConfig, generateUniv2Config, generateErc20Config, deployToRailway, type GenerateConfigResult } from "@/lib/api";
 import { 
   ADAPTER_TYPES, 
   erc20Schema,
@@ -29,6 +29,7 @@ const Index = () => {
   const [generatedConfig, setGeneratedConfig] = useState<GenerateConfigResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isGenerateAndDeploy, setIsGenerateAndDeploy] = useState(false);
   const { toast } = useToast();
 
   // Stage 1: Handle template selection
@@ -37,14 +38,43 @@ const Index = () => {
     setStage("form");
   };
 
-  // Stage 2: Handle form submission
-  const handleFormSubmit = (formData: any) => {
+  // Stage 2: Handle form submission (generate config only)
+  const handleFormSubmit = async (formData: any) => {
     if (!selectedTemplate) return;
 
     setIsGenerating(true);
+    // Show message about potential API limit delays
+    toast({
+      title: "Generating Config",
+      description: "This may take longer if API limits are hit for fromBlock check...",
+    });
+    
     try {
       const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2';
-      const result = generateConfig(formData, adapterType);
+      let result: GenerateConfigResult;
+      
+      if (adapterType === 'uniswap-v2') {
+        // For Uniswap V2, use backend to auto-generate config
+        result = await generateUniv2Config(
+          formData.poolAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      } else {
+        // For ERC20, use backend API to generate config (auto-fetches CoinGecko ID)
+        result = await generateErc20Config(
+          formData.tokenContractAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      }
+      
       setGeneratedConfig(result);
       setStage("output");
       toast({
@@ -62,6 +92,80 @@ const Index = () => {
     }
   };
 
+  // Stage 2: Handle generate and deploy (combined action)
+  const handleGenerateAndDeploy = async (formData: any) => {
+    if (!selectedTemplate) return;
+
+    setIsGenerateAndDeploy(true);
+    // Show message about potential API limit delays
+    toast({
+      title: "Generating & Deploying",
+      description: "This may take longer if API limits are hit for fromBlock check...",
+    });
+    
+    try {
+      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2';
+      let result: GenerateConfigResult;
+      
+      // Step 1: Generate config
+      if (adapterType === 'uniswap-v2') {
+        result = await generateUniv2Config(
+          formData.poolAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      } else {
+        result = await generateErc20Config(
+          formData.tokenContractAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      }
+
+      // Step 2: Deploy to Railway
+      const chainId = (result.config as any)?.network?.chainId;
+      if (!chainId) {
+        throw new Error("Chain ID not found in configuration");
+      }
+
+      const deployResult = await deployToRailway(
+        result.base64,
+        chainId
+      );
+      
+      if (deployResult.success) {
+        setGeneratedConfig(result);
+        toast({
+          title: "Deployment Successful",
+          description: deployResult.projectUrl 
+            ? `Project deployed! Opening Railway...`
+            : deployResult.message || `Project ID: ${deployResult.projectId}`,
+        });
+        // Open Railway project directly in new tab
+        if (deployResult.projectUrl) {
+          window.open(deployResult.projectUrl, '_blank');
+        }
+        // Don't navigate to output stage - user is going directly to Railway
+      } else {
+        throw new Error(deployResult.message || "Deployment failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Generation & Deployment Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerateAndDeploy(false);
+    }
+  };
+
   // Stage 3: Handle Railway deployment
   const handleDeploy = async (rpcUrl: string, absintheApiKey: string, coingeckoApiKey: string, templateId?: string) => {
     if (!generatedConfig) return;
@@ -69,7 +173,7 @@ const Index = () => {
     setIsDeploying(true);
     try {
       // Extract chainId from the generated config
-      const chainId = generatedConfig.config?.network?.chainId;
+      const chainId = (generatedConfig.config as any)?.network?.chainId;
       if (!chainId) {
         throw new Error("Chain ID not found in configuration");
       }
@@ -161,7 +265,9 @@ const Index = () => {
               schema={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].schema}
               fields={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].fields}
               onSubmit={handleFormSubmit}
+              onGenerateAndDeploy={handleGenerateAndDeploy}
               isLoading={isGenerating}
+              isDeploying={isGenerateAndDeploy}
             />
           </div>
         )}
