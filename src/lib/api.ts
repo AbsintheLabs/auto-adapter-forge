@@ -217,6 +217,174 @@ export async function deployToRailway(
 }
 
 /**
+ * Get token0 and token1 addresses from a Uniswap V2 pool
+ */
+export async function getPoolTokens(
+  poolAddress: string,
+  chainId: number
+): Promise<{ success: boolean; token0?: string; token1?: string; error?: string }> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/get-pool-tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        poolAddress,
+        chainId
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to fetch pool tokens');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Get pool tokens error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to fetch pool tokens");
+  }
+}
+
+/**
+ * Auto-generate complete Uniswap V2 config from pool address
+ * Backend will fetch tokens, CoinGecko IDs, and create swap/LP entries
+ */
+export async function generateUniv2Config(
+  poolAddress: string,
+  chainId: number,
+  fromBlock?: number,
+  toBlock?: number,
+  finality?: number,
+  flushIntervalHours?: number
+): Promise<GenerateConfigResult> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/generate-univ2-config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        poolAddress,
+        chainId,
+        fromBlock,
+        toBlock,
+        finality,
+        flushIntervalHours,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to generate Uniswap V2 config');
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || data.error || 'Failed to generate config');
+    }
+
+    return {
+      config: data.config,
+      base64: data.base64,
+    };
+  } catch (error) {
+    console.error("Generate UniV2 config error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to generate Uniswap V2 config");
+  }
+}
+
+/**
+ * Get CoinGecko ID for a token address
+ */
+export async function getCoinGeckoId(
+  tokenAddress: string,
+  chainId: number
+): Promise<{ success: boolean; coingeckoId?: string; tokenName?: string; tokenSymbol?: string; error?: string }> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/get-coingecko-id`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        tokenAddress,
+        chainId
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to fetch CoinGecko ID');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Get CoinGecko ID error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to fetch CoinGecko ID");
+  }
+}
+
+/**
+ * Auto-generate complete ERC20 config from token address
+ * Backend will fetch CoinGecko ID and create token entry
+ */
+export async function generateErc20Config(
+  tokenContractAddress: string,
+  chainId: number,
+  fromBlock?: number,
+  toBlock?: number,
+  finality?: number,
+  flushIntervalHours?: number
+): Promise<GenerateConfigResult> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/generate-erc20-config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tokenContractAddress,
+        chainId,
+        fromBlock,
+        toBlock,
+        finality,
+        flushIntervalHours,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to generate ERC20 config');
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || data.error || 'Failed to generate config');
+    }
+
+    return {
+      config: data.config,
+      base64: data.base64,
+    };
+  } catch (error) {
+    console.error("Generate ERC20 config error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to generate ERC20 config");
+  }
+}
+
+/**
  * Encode JSON to Base64 (client-side utility)
  */
 export function encodeToBase64(obj: any): string {

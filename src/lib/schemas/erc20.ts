@@ -11,7 +11,7 @@ export const erc20Schema = z.object({
   finality: z.number().min(1, "Finality must be at least 1").optional().default(75),
   
   // Range configuration
-  fromBlock: z.number().min(0, "From block must be positive"),
+  fromBlock: z.number().min(0, "From block must be positive").optional(),
   toBlock: z.number().optional(),
   
   // Sink configuration (handled automatically in backend)
@@ -24,26 +24,11 @@ export const erc20Schema = z.object({
   
   // Adapter-specific configuration
   tokenContractAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address"),
-  pricingKind: z.enum(["pegged", "coingecko"], {
-    errorMap: () => ({ message: "Pricing kind must be 'pegged' or 'coingecko'" }),
-  }),
+  // Pricing fields are optional - backend will auto-fetch CoinGecko ID
+  pricingKind: z.enum(["pegged", "coingecko"]).optional(),
   usdPegValue: z.number().optional(),
   coingeckoId: z.string().optional(),
-}).refine(
-  (data) => {
-    if (data.pricingKind === "pegged") {
-      return data.usdPegValue !== undefined && data.usdPegValue > 0;
-    }
-    if (data.pricingKind === "coingecko") {
-      return data.coingeckoId !== undefined && data.coingeckoId.length > 0;
-    }
-    return true;
-  },
-  {
-    message: "USD peg value is required for pegged pricing, or CoinGecko ID for coingecko pricing",
-    path: ["pricingKind"],
-  }
-);
+});
 
 export type Erc20Config = z.infer<typeof erc20Schema>;
 
