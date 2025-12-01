@@ -385,6 +385,56 @@ export async function generateErc20Config(
 }
 
 /**
+ * Auto-generate complete Uniswap V3 config from pool address
+ * Backend will fetch tokens, CoinGecko IDs, and create swap entries
+ */
+export async function generateUniv3Config(
+  poolAddress: string,
+  chainId: number,
+  fromBlock?: number,
+  toBlock?: number,
+  finality?: number,
+  flushIntervalHours?: number
+): Promise<GenerateConfigResult> {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/generate-univ3-config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        poolAddress,
+        chainId,
+        fromBlock,
+        toBlock,
+        finality,
+        flushIntervalHours,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error || 'Failed to generate Uniswap V3 config');
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || data.error || 'Failed to generate config');
+    }
+
+    return {
+      config: data.config,
+      base64: data.base64,
+    };
+  } catch (error) {
+    console.error("Generate UniV3 config error:", error);
+    throw new Error(error instanceof Error ? error.message : "Failed to generate Uniswap V3 config");
+  }
+}
+
+/**
  * Encode JSON to Base64 (client-side utility)
  */
 export function encodeToBase64(obj: any): string {

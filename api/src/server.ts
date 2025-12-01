@@ -53,6 +53,31 @@ export const CHAIN_ID_TO_COINGECKO_PLATFORM: Record<number, string> = {
   // Note: Some chains may not be supported by CoinGecko API
 };
 
+// Uniswap V3 Factory and Position Manager addresses by chain
+export const UNIV3_FACTORY_ADDRESSES: Record<number, string> = {
+  1: '0x1F98431c8aD98523631AE4a59f267346ea31F984', // Ethereum
+  137: '0x1F98431c8aD98523631AE4a59f267346ea31F984', // Polygon
+  42161: '0x1F98431c8aD98523631AE4a59f267346ea31F984', // Arbitrum
+  10: '0x1F98431c8aD98523631AE4a59f267346ea31F984', // Optimism
+  8453: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD', // Base
+  56: '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7', // BSC
+  43114: '0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD', // Avalanche
+  143: '0x204faca1764b154221e35c0d20abb3c525710498', // Monad
+  43111: '0xCdBCd51a5E8728E0AF4895ce5771b7d17fF71959', // Hemi
+};
+
+export const UNIV3_POSITION_MANAGER_ADDRESSES: Record<number, string> = {
+  1: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', // Ethereum
+  137: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', // Polygon
+  42161: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', // Arbitrum
+  10: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', // Optimism
+  8453: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', // Base
+  56: '0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613', // BSC
+  43114: '0x655C406EBFa14EE2006250925e54ec43AD184f8B', // Avalanche
+  143: '0x7197e214c0b767cfb76fb734ab638e2c192f4e53', // Monad
+  43111: '0xe43ca1dee3f0fc1e2df73a0745674545f11a59f5', // Hemi
+};
+
 // Etherscan V2 API base URL - works for all supported chains with chainid parameter
 export const ETHERSCAN_V2_BASE_URL = 'https://api.etherscan.io/v2/api';
 
@@ -292,6 +317,15 @@ const generateErc20ConfigSchema = z.object({
   toBlock: z.number().optional(),
   finality: z.number().min(1).optional().default(75),
   flushIntervalHours: z.number().min(1).optional().default(1),
+});
+
+const generateUniv3ConfigSchema = z.object({
+  poolAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address"),
+  chainId: z.number().min(1, "Chain ID is required"),
+  fromBlock: z.number().min(0, "From block must be positive").optional(),
+  toBlock: z.number().optional(),
+  finality: z.number().min(1).optional().default(75),
+  flushIntervalHours: z.number().min(1).optional().default(48),
 });
 
 /**
@@ -902,6 +936,248 @@ app.post('/api/generate-erc20-config', async (req: Request, res: Response, next:
     });
   } catch (error) {
     console.error('Generate ERC20 config error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request payload',
+        error: error.errors,
+      });
+    }
+    next(error);
+  }
+});
+
+/**
+ * /api/generate-univ3-config
+ * Auto-generates complete Uniswap V3 config: fetches tokens, CoinGecko IDs, and creates swap entries
+ */
+app.post('/api/generate-univ3-config', async (req: Request, res: Response, next: NextFunction) => {
+  console.log('📥 POST /api/generate-univ3-config received');
+  try {
+    const body = generateUniv3ConfigSchema.parse(req.body);
+    
+    // Validate chain is supported for Uniswap V3
+    if (!UNIV3_FACTORY_ADDRESSES[body.chainId] || !UNIV3_POSITION_MANAGER_ADDRESSES[body.chainId]) {
+      return res.status(400).json({
+        success: false,
+        message: `Chain ID ${body.chainId} is not supported for Uniswap V3`,
+        error: 'Unsupported chain',
+      });
+    }
+    
+    // Step 0: Get fromBlock - auto-fetch for supported chains, require manual input for others
+    let fromBlock = body.fromBlock;
+    
+    if (!fromBlock) {
+      if (MANUAL_FROM_BLOCK_CHAINS.includes(body.chainId)) {
+        return res.status(400).json({
+          success: false,
+          message: `Chain ${body.chainId} does not support automatic fromBlock lookup. Please provide fromBlock manually.`,
+          error: 'fromBlock required for this chain',
+        });
+      }
+      
+      // Try to fetch contract creation block for supported chains (with retries)
+      console.log(`🔍 Fetching contract creation block for pool ${body.poolAddress} on chain ${body.chainId}`);
+      const creationInfo = await getContractCreationBlock(body.poolAddress, body.chainId);
+      
+      if (creationInfo) {
+        fromBlock = creationInfo.blockNumber;
+        console.log(`✅ Found creation block: ${fromBlock}`);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Could not automatically determine fromBlock for pool ${body.poolAddress} after retries. Please provide fromBlock manually.`,
+          error: 'fromBlock lookup failed',
+        });
+      }
+    }
+    
+    // Step 1: Get token0 and token1 from Uniswap V3 pool
+    const rpcUrl = getRpcUrlForChain(body.chainId, env.RPC_API_KEY);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    
+    // Uniswap V3 Pool ABI (same as V2 for token0/token1)
+    const poolABI = [
+      "function token0() external view returns (address)",
+      "function token1() external view returns (address)",
+    ];
+    const poolContract = new ethers.Contract(body.poolAddress, poolABI, provider);
+    
+    let token0: string;
+    let token1: string;
+    try {
+      [token0, token1] = await Promise.all([
+        poolContract.token0(),
+        poolContract.token1(),
+      ]);
+    } catch (contractError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to fetch tokens from pool contract',
+        error: contractError instanceof Error ? contractError.message : 'Unknown contract error',
+      });
+    }
+
+    if (!token0 || !token1 || !ethers.isAddress(token0) || !ethers.isAddress(token1)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid token addresses returned from pool',
+        error: 'Invalid token addresses',
+      });
+    }
+
+    // Step 2: Get CoinGecko IDs for both tokens
+    const platform = CHAIN_ID_TO_COINGECKO_PLATFORM[body.chainId];
+    if (!platform) {
+      return res.status(400).json({
+        success: false,
+        message: `Chain ID ${body.chainId} is not supported by CoinGecko API`,
+        error: 'Unsupported chain',
+      });
+    }
+
+    const [token0Data, token1Data] = await Promise.all([
+      fetch(`https://pro-api.coingecko.com/api/v3/coins/${platform}/contract/${token0.toLowerCase()}`, {
+        headers: { 'x-cg-pro-api-key': env.COINGECKO_API_KEY },
+      }).then(r => r.ok ? r.json() as { id?: string; platforms?: Record<string, string> } : null).catch(() => null),
+      fetch(`https://pro-api.coingecko.com/api/v3/coins/${platform}/contract/${token1.toLowerCase()}`, {
+        headers: { 'x-cg-pro-api-key': env.COINGECKO_API_KEY },
+      }).then(r => r.ok ? r.json() as { id?: string; platforms?: Record<string, string> } : null).catch(() => null),
+    ]);
+
+    const token0CoingeckoId = token0Data?.id;
+    const token1CoingeckoId = token1Data?.id;
+
+    if (!token0CoingeckoId || !token1CoingeckoId) {
+      return res.status(400).json({
+        success: false,
+        message: `Could not find CoinGecko IDs for tokens. Token0: ${token0CoingeckoId ? 'found' : 'not found'}, Token1: ${token1CoingeckoId ? 'found' : 'not found'}`,
+        error: 'CoinGecko ID not found',
+        token0: token0,
+        token1: token1,
+      });
+    }
+
+    // Step 3: Get base CoinGecko IDs (remove chain prefixes)
+    const getBaseCoinId = async (coinId: string): Promise<string> => {
+      try {
+        const coinData = await fetch(`https://pro-api.coingecko.com/api/v3/coins/${coinId}`, {
+          headers: { 'x-cg-pro-api-key': env.COINGECKO_API_KEY },
+        }).then(r => r.ok ? r.json() as { parent?: { id?: string } } : null);
+        
+        if (coinData?.parent?.id) {
+          return coinData.parent.id;
+        }
+        
+        const chainPrefixes = ['hemi-', 'stargate-bridged-', 'wrapped-', 'bridged-'];
+        for (const prefix of chainPrefixes) {
+          if (coinId.startsWith(prefix)) {
+            const baseId = coinId.replace(prefix, '');
+            const baseCheck = await fetch(`https://pro-api.coingecko.com/api/v3/coins/${baseId}`, {
+              headers: { 'x-cg-pro-api-key': env.COINGECKO_API_KEY },
+            });
+            if (baseCheck.ok) {
+              return baseId;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Could not fetch base coin for ${coinId}, using original ID`);
+      }
+      return coinId;
+    };
+
+    const baseToken0Id = await getBaseCoinId(token0CoingeckoId);
+    const baseToken1Id = await getBaseCoinId(token1CoingeckoId);
+
+    // Step 4: Get factory and position manager addresses for this chain
+    const factoryAddress = UNIV3_FACTORY_ADDRESSES[body.chainId];
+    const positionManagerAddress = UNIV3_POSITION_MANAGER_ADDRESSES[body.chainId];
+
+    // Step 5: Build the config structure
+    const gatewayUrl = CHAIN_ID_TO_GATEWAY_URL[body.chainId];
+    const flushInterval = `${body.flushIntervalHours || 48}h`;
+
+    const config = {
+      chainArch: 'evm',
+      flushInterval: flushInterval,
+      redisUrl: '${env:REDIS_URL}',
+      sinkConfig: {
+        sinks: [
+          { sinkType: 'csv', path: 'univ3-new.csv' },
+          { sinkType: 'stdout' },
+          {
+            sinkType: 'absinthe',
+            url: '${env:ABSINTHE_API_URL}',
+            apiKey: '${env:ABSINTHE_API_KEY}',
+          },
+        ],
+      },
+      network: {
+        chainId: body.chainId,
+        gatewayUrl: gatewayUrl,
+        rpcUrl: '${env:RPC_URL}',
+        finality: body.finality || 75,
+      },
+      range: {
+        fromBlock: fromBlock,
+        ...(body.toBlock ? { toBlock: body.toBlock } : {}),
+      },
+      adapterConfig: {
+        adapterId: 'uniswap-v3',
+        config: {
+          swap: [
+            {
+              params: {
+                factoryAddress: factoryAddress,
+                nonFungiblePositionManagerAddress: positionManagerAddress,
+                poolAddress: body.poolAddress,
+              },
+              assetSelectors: {
+                swapLegAddress: token0,
+              },
+              pricing: {
+                kind: 'coingecko',
+                id: baseToken0Id,
+              },
+            },
+            {
+              params: {
+                factoryAddress: factoryAddress,
+                nonFungiblePositionManagerAddress: positionManagerAddress,
+                poolAddress: body.poolAddress,
+              },
+              assetSelectors: {
+                swapLegAddress: token1,
+              },
+              pricing: {
+                kind: 'coingecko',
+                id: baseToken1Id,
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    // Step 6: Encode to base64
+    const jsonString = JSON.stringify(config, null, 2) + "\n";
+    const base64Config = Buffer.from(jsonString, 'utf8').toString('base64');
+
+    res.json({
+      success: true,
+      config: config,
+      base64: base64Config,
+      tokens: {
+        token0: token0,
+        token1: token1,
+        token0CoingeckoId: baseToken0Id,
+        token1CoingeckoId: baseToken1Id,
+      },
+    });
+  } catch (error) {
+    console.error('Generate UniV3 config error:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
