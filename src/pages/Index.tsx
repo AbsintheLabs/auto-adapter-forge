@@ -5,13 +5,15 @@ import { ConfigOutput } from "@/components/ConfigOutput";
 import { TemplateSelection } from "@/components/TemplateSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { useToast } from "@/hooks/use-toast";
-import { generateConfig, generateUniv2Config, generateErc20Config, deployToRailway, type GenerateConfigResult } from "@/lib/api";
+import { generateConfig, generateUniv2Config, generateUniv3Config, generateErc20Config, deployToRailway, type GenerateConfigResult } from "@/lib/api";
 import { 
   ADAPTER_TYPES, 
   erc20Schema,
   erc20Fields,
   univ2Schema,
   univ2Fields,
+  univ3Schema,
+  univ3Fields,
 } from "@/lib/schemas";
 import { Sparkles } from "lucide-react";
 
@@ -19,6 +21,7 @@ import { Sparkles } from "lucide-react";
 const ADAPTER_CONFIG = {
   erc20: { schema: erc20Schema, fields: erc20Fields },
   "uniswap-v2": { schema: univ2Schema, fields: univ2Fields },
+  "uniswap-v3": { schema: univ3Schema, fields: univ3Fields },
 };
 
 type Stage = "template" | "form" | "output";
@@ -50,12 +53,22 @@ const Index = () => {
     });
     
     try {
-      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2';
+      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
       let result: GenerateConfigResult;
       
       if (adapterType === 'uniswap-v2') {
         // For Uniswap V2, use backend to auto-generate config
         result = await generateUniv2Config(
+          formData.poolAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      } else if (adapterType === 'uniswap-v3') {
+        // For Uniswap V3, use backend to auto-generate config
+        result = await generateUniv3Config(
           formData.poolAddress,
           formData.chainId,
           formData.fromBlock,
@@ -104,12 +117,21 @@ const Index = () => {
     });
     
     try {
-      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2';
+      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
       let result: GenerateConfigResult;
       
       // Step 1: Generate config
       if (adapterType === 'uniswap-v2') {
         result = await generateUniv2Config(
+          formData.poolAddress,
+          formData.chainId,
+          formData.fromBlock,
+          formData.toBlock,
+          formData.finality,
+          formData.flushIntervalHours
+        );
+      } else if (adapterType === 'uniswap-v3') {
+        result = await generateUniv3Config(
           formData.poolAddress,
           formData.chainId,
           formData.fromBlock,
