@@ -138,46 +138,43 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Network Configuration</h3>
               
-              {/* Chain Selection */}
-              {visibleFields.filter(f => f.name === "chainId").map((field) => (
-                <FormField
-                  key={field.name}
-                  control={form.control}
-                  name={field.name}
-                  render={({ field: formField }) => (
-                    <FormItem>
-                      <FieldWithInfo fieldName="chainId" label={field.label}>
-                        <Select
-                          onValueChange={(value) => {
-                            const chainId = Number(value);
-                            formField.onChange(chainId);
-                            // Automatically set gatewayUrl
-                            const gatewayUrl = getGatewayUrlForChainId(chainId);
-                            if (gatewayUrl) {
-                              form.setValue("gatewayUrl", gatewayUrl);
-                            }
-                          }}
-                          value={formField.value?.toString()}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a chain" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {CHAIN_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value.toString()}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FieldWithInfo>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+              {/* Chain Selection - Always show since it's required for all adapters */}
+              <FormField
+                control={form.control}
+                name="chainId"
+                render={({ field: formField }) => (
+                  <FormItem>
+                    <FieldWithInfo fieldName="chainId" label="Chain">
+                      <Select
+                        onValueChange={(value) => {
+                          const chainId = Number(value);
+                          formField.onChange(chainId);
+                          // Automatically set gatewayUrl
+                          const gatewayUrl = getGatewayUrlForChainId(chainId);
+                          if (gatewayUrl) {
+                            form.setValue("gatewayUrl", gatewayUrl);
+                          }
+                        }}
+                        value={formField.value?.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a chain" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CHAIN_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value.toString()}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FieldWithInfo>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
             </div>
 
@@ -194,36 +191,31 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
               return (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Block Range</h3>
-                  {visibleFields.filter(f => f.name === "fromBlock").map((field) => (
-                    <FormField
-                      key={field.name}
-                      control={form.control}
-                      name={field.name}
-                      render={({ field: formField }) => (
-                        <FormItem>
-                          <FieldWithInfo fieldName={field.name} label={field.label}>
-                            <FormControl>
-                              <Input
-                                type={field.type}
-                                placeholder={field.placeholder}
-                                {...formField}
-                                onChange={(e) => {
-                                  const value = field.type === "number" 
-                                    ? (e.target.value === "" ? undefined : Number(e.target.value))
-                                    : e.target.value;
-                                  formField.onChange(value);
-                                }}
-                              />
-                            </FormControl>
-                          </FieldWithInfo>
-                          <p className="text-sm text-destructive">
-                            ⚠️ This chain (Avalanche, Base, BSC, OP Mainnet, or Hemi) requires manual From Block input. Please enter the block number {isUniswapV2 ? "when the pool was created" : "when the token was deployed"}.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
+                  <FormField
+                    control={form.control}
+                    name="fromBlock"
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FieldWithInfo fieldName="fromBlock" label="From Block">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder={isUniswapV2 ? "1451314" : "2000000"}
+                              {...formField}
+                              onChange={(e) => {
+                                const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                formField.onChange(value);
+                              }}
+                            />
+                          </FormControl>
+                        </FieldWithInfo>
+                        <p className="text-sm text-destructive">
+                          ⚠️ This chain (Avalanche, Base, BSC, OP Mainnet, or Hemi) requires manual From Block input. Please enter the block number {isUniswapV2 ? "when the pool was created" : "when the token was deployed"}.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               );
             })()}
