@@ -1,3 +1,5 @@
+"use client";
+
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { FIELD_INFO } from "@/lib/fieldInfo";
