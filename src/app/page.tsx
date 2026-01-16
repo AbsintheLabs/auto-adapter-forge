@@ -1,11 +1,23 @@
+"use client";
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AdapterForm } from "@/components/AdapterForm";
 import { ConfigOutput } from "@/components/ConfigOutput";
 import { TemplateSelection } from "@/components/TemplateSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
+import { ManualPricingDialog } from "@/components/ManualPricingDialog";
 import { useToast } from "@/hooks/use-toast";
-import { generateConfig, generateUniv2Config, generateUniv3Config, generateErc20Config, deployToRailway, type GenerateConfigResult } from "@/lib/api";
+import { 
+  generateUniv2Config, 
+  generateUniv3Config, 
+  generateErc20Config, 
+  deployToRailway, 
+  type GenerateConfigResult,
+  type ManualInputRequired,
+  type ManualPricing,
+} from "@/lib/api";
+import { useRailwayEnabled } from "@/hooks/use-railway-enabled";
 import { 
   ADAPTER_TYPES, 
   erc20Schema,
@@ -26,7 +38,7 @@ const ADAPTER_CONFIG = {
 
 type Stage = "template" | "form" | "output";
 
-const Index = () => {
+export default function Home() {
   const [stage, setStage] = useState<Stage>("template");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [generatedConfig, setGeneratedConfig] = useState<GenerateConfigResult | null>(null);
@@ -34,6 +46,15 @@ const Index = () => {
   const [isDeploying, setIsDeploying] = useState(false);
   const [isGenerateAndDeploy, setIsGenerateAndDeploy] = useState(false);
   const { toast } = useToast();
+  
+  // Manual pricing dialog state
+  const [showManualPricingDialog, setShowManualPricingDialog] = useState(false);
+  const [manualInputData, setManualInputData] = useState<ManualInputRequired | null>(null);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [isDeployAfterManual, setIsDeployAfterManual] = useState(false);
+  
+  // Check if Railway deployment is enabled
+  const { enabled: railwayEnabled, loading: railwayLoading } = useRailwayEnabled();
 
   // Stage 1: Handle template selection
   const handleTemplateSelect = (templateId: string) => {
@@ -41,8 +62,17 @@ const Index = () => {
     setStage("form");
   };
 
+  // Helper function to check if result requires manual input
+  const isManualInputRequired = (result: GenerateConfigResult | ManualInputRequired): result is ManualInputRequired => {
+    return 'requiresManualInput' in result && result.requiresManualInput === true;
+  };
+
   // Stage 2: Handle form submission (generate config only)
-  const handleFormSubmit = async (formData: any) => {
+  const handleFormSubmit = async (formData: any, manualPricing?: {
+    manualPricing?: ManualPricing;
+    token0ManualPricing?: ManualPricing;
+    token1ManualPricing?: ManualPricing;
+  }) => {
     if (!selectedTemplate) return;
 
     setIsGenerating(true);
@@ -54,7 +84,7 @@ const Index = () => {
     
     try {
       const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
-      let result: GenerateConfigResult;
+      let result: GenerateConfigResult | ManualInputRequired;
       
       if (adapterType === 'uniswap-v2') {
         // For Uniswap V2, use backend to auto-generate config
@@ -64,7 +94,9 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.token0ManualPricing,
+          manualPricing?.token1ManualPricing
         );
       } else if (adapterType === 'uniswap-v3') {
         // For Uniswap V3, use backend to auto-generate config
@@ -74,7 +106,9 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.token0ManualPricing,
+          manualPricing?.token1ManualPricing
         );
       } else {
         // For ERC20, use backend API to generate config (auto-fetches CoinGecko ID)
@@ -84,8 +118,19 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.manualPricing
         );
+      }
+      
+      // Check if manual input is required
+      if (isManualInputRequired(result)) {
+        setManualInputData(result);
+        setPendingFormData(formData);
+        setIsDeployAfterManual(false);
+        setShowManualPricingDialog(true);
+        setIsGenerating(false);
+        return;
       }
       
       setGeneratedConfig(result);
@@ -106,7 +151,11 @@ const Index = () => {
   };
 
   // Stage 2: Handle generate and deploy (combined action)
-  const handleGenerateAndDeploy = async (formData: any) => {
+  const handleGenerateAndDeploy = async (formData: any, manualPricing?: {
+    manualPricing?: ManualPricing;
+    token0ManualPricing?: ManualPricing;
+    token1ManualPricing?: ManualPricing;
+  }) => {
     if (!selectedTemplate) return;
 
     setIsGenerateAndDeploy(true);
@@ -118,7 +167,7 @@ const Index = () => {
     
     try {
       const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
-      let result: GenerateConfigResult;
+      let result: GenerateConfigResult | ManualInputRequired;
       
       // Step 1: Generate config
       if (adapterType === 'uniswap-v2') {
@@ -128,7 +177,9 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.token0ManualPricing,
+          manualPricing?.token1ManualPricing
         );
       } else if (adapterType === 'uniswap-v3') {
         result = await generateUniv3Config(
@@ -137,7 +188,9 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.token0ManualPricing,
+          manualPricing?.token1ManualPricing
         );
       } else {
         result = await generateErc20Config(
@@ -146,8 +199,19 @@ const Index = () => {
           formData.fromBlock,
           formData.toBlock,
           formData.finality,
-          formData.flushIntervalHours
+          formData.flushIntervalHours,
+          manualPricing?.manualPricing
         );
+      }
+
+      // Check if manual input is required
+      if (isManualInputRequired(result)) {
+        setManualInputData(result);
+        setPendingFormData(formData);
+        setIsDeployAfterManual(true);
+        setShowManualPricingDialog(true);
+        setIsGenerateAndDeploy(false);
+        return;
       }
 
       // Step 2: Deploy to Railway
@@ -186,6 +250,35 @@ const Index = () => {
     } finally {
       setIsGenerateAndDeploy(false);
     }
+  };
+  
+  // Handle manual pricing submission
+  const handleManualPricingSubmit = (pricing: {
+    manualPricing?: ManualPricing;
+    token0ManualPricing?: ManualPricing;
+    token1ManualPricing?: ManualPricing;
+  }) => {
+    setShowManualPricingDialog(false);
+    
+    if (pendingFormData) {
+      if (isDeployAfterManual) {
+        handleGenerateAndDeploy(pendingFormData, pricing);
+      } else {
+        handleFormSubmit(pendingFormData, pricing);
+      }
+    }
+  };
+  
+  // Handle manual pricing cancel
+  const handleManualPricingCancel = () => {
+    setShowManualPricingDialog(false);
+    setManualInputData(null);
+    setPendingFormData(null);
+    setIsDeployAfterManual(false);
+    toast({
+      title: "Cancelled",
+      description: "Config generation was cancelled.",
+    });
   };
 
   // Stage 3: Handle Railway deployment
@@ -244,6 +337,16 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      {/* Manual Pricing Dialog */}
+      <ManualPricingDialog
+        open={showManualPricingDialog}
+        onOpenChange={setShowManualPricingDialog}
+        manualInputData={manualInputData}
+        adapterType={selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3'}
+        onSubmit={handleManualPricingSubmit}
+        onCancel={handleManualPricingCancel}
+      />
+      
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         {/* Header */}
         <div className="text-center mb-12">
@@ -287,7 +390,7 @@ const Index = () => {
               schema={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].schema}
               fields={ADAPTER_CONFIG[selectedTemplate as keyof typeof ADAPTER_CONFIG].fields}
               onSubmit={handleFormSubmit}
-              onGenerateAndDeploy={handleGenerateAndDeploy}
+              onGenerateAndDeploy={railwayEnabled ? handleGenerateAndDeploy : undefined}
               isLoading={isGenerating}
               isDeploying={isGenerateAndDeploy}
             />
@@ -307,14 +410,16 @@ const Index = () => {
             <ConfigOutput
               config={generatedConfig.config}
               base64Config={generatedConfig.base64}
-              onDeploy={handleDeploy}
+              warnings={generatedConfig.warnings}
+              errors={generatedConfig.errors}
+              onDeploy={railwayEnabled ? handleDeploy : undefined}
               isDeploying={isDeploying}
             />
+            {/* Note: Manual Railway deployment is always available via DeploymentDialog,
+                even when automated deployment (railwayEnabled) is false */}
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default Index;
+}

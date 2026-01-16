@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,12 +15,13 @@ import { FieldWithInfo } from "./FieldWithInfo";
 import { UniswapV2Form } from "./UniswapV2Form";
 import { UniswapV3Form } from "./UniswapV3Form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import { Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Info, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { FIELD_INFO } from "@/lib/fieldInfo";
 import { UniswapV2HelpModal } from "./UniswapV2HelpModal";
 import { ERC20HelpModal } from "./ERC20HelpModal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 interface AdapterFormProps {
   adapterType: string;
@@ -127,7 +130,9 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
                   const errorEntries = Object.entries(errors);
                   if (errorEntries.length > 0) {
                     const [fieldName, error] = errorEntries[0];
-                    const errorMessage = error?.message || `Validation error in ${fieldName}`;
+                    const errorMessage = typeof error?.message === 'string' 
+                      ? error.message 
+                      : `Validation error in ${fieldName}`;
                     toast({
                       title: "Validation Error",
                       description: errorMessage,
@@ -195,12 +200,36 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
               return (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Block Range</h3>
+                  
+                  {/* Critical Warning Alert */}
+                  <Alert variant="destructive" className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-200">⚠️ Critical: Manual Block Number Required</AlertTitle>
+                    <AlertDescription className="text-amber-700 dark:text-amber-300 space-y-2">
+                      <p>
+                        This chain (Avalanche, Base, BSC, OP Mainnet, or Hemi) requires you to manually enter the starting block number.
+                      </p>
+                      <p className="font-semibold">
+                        <strong>Important:</strong> It is your responsibility to provide the correct block number. 
+                        An incorrect value will cause your adapter to:
+                      </p>
+                      <ul className="list-disc list-inside ml-2 space-y-1">
+                        <li>Miss historical data if the block is too high</li>
+                        <li>Process unnecessary blocks if the block is too low (slower sync)</li>
+                        <li>Potentially produce incorrect point calculations</li>
+                      </ul>
+                      <p className="text-sm mt-2">
+                        💡 <strong>Tip:</strong> Find the {isUniswap ? "pool creation" : "token deployment"} transaction on a block explorer to get the exact block number.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                  
                   <FormField
                     control={form.control}
                     name="fromBlock"
                     render={({ field: formField }) => (
                       <FormItem>
-                        <FieldWithInfo fieldName="fromBlock" label="From Block">
+                        <FieldWithInfo fieldName="fromBlock" label="From Block (Required)">
                           <FormControl>
                             <Input
                               type="number"
@@ -210,12 +239,13 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
                                 const value = e.target.value === "" ? undefined : Number(e.target.value);
                                 formField.onChange(value);
                               }}
+                              className="border-amber-300 focus:border-amber-500"
                             />
                           </FormControl>
                         </FieldWithInfo>
-                          <p className="text-sm text-destructive">
-                            ⚠️ This chain (Avalanche, Base, BSC, OP Mainnet, or Hemi) requires manual From Block input. Please enter the block number {isUniswap ? "when the pool was created" : "when the token was deployed"}.
-                          </p>
+                        <p className="text-xs text-muted-foreground">
+                          Enter the block number {isUniswap ? "when the pool was created" : "when the token was deployed"}.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -393,7 +423,7 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
                             </FormControl>
                             <SelectContent>
                               {field.options?.map((option) => (
-                                <SelectItem key={option} value={option}>
+                                <SelectItem key={String(option)} value={String(option)}>
                                   {option}
                                 </SelectItem>
                               ))}

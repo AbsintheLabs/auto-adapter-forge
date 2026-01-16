@@ -1,28 +1,33 @@
 # Absinthe Adapter Config Generator
 
-AI-powered configuration generator for Absinthe adapters. This full-stack web application accepts natural language input, classifies the required adapter type using AI, renders dynamic forms based on schemas, and generates complete Absinthe adapter configurations.
+Configuration generator for Absinthe adapters with one-click Railway deployment. Generate and deploy adapter configurations for ERC20 tokens, Uniswap V2, and Uniswap V3 pools.
+
+> 📚 **Deploy prebuilt adapters on Railway**: See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete deployment guide, or read the official [Railway Deployment Process Manual](https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f)
 
 ## 🎯 Features
 
-- **Natural Language Input**: Describe your needs in plain English
-- **AI-Powered Classification**: Automatically detects which adapter you need (Uniswap V2/V3, Morpho, Printr, ERC20)
+- **Template Selection**: Choose from ERC20, Uniswap V2, or Uniswap V3 adapters
+- **Auto-Detection**: Automatic CoinGecko ID lookup, fromBlock detection, and pool token discovery
+- **Smart Validation**: Contract validation, wrong-chain detection, and helpful error messages
+- **Manual Pricing Fallback**: Enter USD peg values when CoinGecko IDs aren't available
 - **Dynamic Form Generation**: Schema-based forms with Zod validation
-- **Config Generation**: AI-generated Absinthe adapter configurations
 - **Base64 Encoding**: Automatic encoding for deployment
-- **Railway Deployment**: One-click deployment to Railway with environment configuration
+- **Railway Deployment**: One-click deployment OR manual deployment with step-by-step guide
 
 ## 🏗️ Architecture
 
-### Frontend (Vite + React)
+### Full-Stack Next.js Application
+- **Frontend**: React with Next.js App Router
+- **Backend**: Next.js API Routes (serverless)
 - **Three-Stage Flow**:
-  1. Natural language input
+  1. Template selection
   2. Dynamic form configuration
   3. Config output and deployment
 
-### Backend (Express.js)
-- Standalone API server
-- Can be deployed anywhere (Railway, Render, Vercel, Heroku, etc.)
-- Uses OpenAI or any compatible AI provider
+### API Routes
+- All API endpoints are Next.js API routes in `/src/app/api/`
+- Server-side utilities in `/src/lib/server/`
+- Can be deployed to Vercel, Railway, or any Next.js-compatible platform
 
 ### Schemas (`/src/lib/schemas/`)
 Each adapter has:
@@ -39,57 +44,74 @@ Available adapters:
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Node.js 18+
-- OpenAI API key (or compatible AI provider)
+### For Users: Deploy an Adapter
 
-### 1. Clone and Install
+**No coding required!** Just:
+
+1. Open the application
+2. Select your adapter type (ERC20, Uniswap V2, or V3)
+3. Fill in the contract details
+4. Click deploy!
+
+> 📖 **Full deployment guide**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### For Developers: Run Locally
+
+#### Prerequisites
+- Node.js 18+
+- Required API keys (see Environment Variables below)
+
+#### 1. Clone and Install
 
 ```bash
 git clone <your-repo-url>
 cd auto-adapter-forge
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd api
-npm install
-cd ..
+pnpm install  # or npm install
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment Variables
 
-**Frontend `.env`:**
+Create a `.env.local` file in the root directory:
+
 ```env
-VITE_API_BASE_URL=http://localhost:3001
+# Feature Flags
+ENABLE_RAILWAY_DEPLOYMENT=false  # Set to 'true' to enable automated Railway deployment
+
+# Railway API Configuration (only required if ENABLE_RAILWAY_DEPLOYMENT=true)
+RAILWAY_API_TOKEN=your_railway_api_token
+RAILWAY_WORKSPACE_ID=your_railway_workspace_id
+RAILWAY_TEMPLATE_ID=e671e590-fec4-4beb-8044-37f013a351e9
+
+# RPC Configuration (Infura or Alchemy API Key)
+RPC_API_KEY=your_infura_or_alchemy_api_key
+
+# Absinthe Configuration (for this generator app, NOT for deployed adapters)
+ABSINTHE_API_KEY=your_absinthe_api_key
+ABSINTHE_API_URL=https://v2.adapters.absinthe.network
+
+# CoinGecko API Key
+COINGECKO_API_KEY=your_coingecko_api_key
+
+# Etherscan API Key (optional - for auto fromBlock lookup)
+ETHERSCAN_API_KEY=your_etherscan_api_key
 ```
 
-**Backend `api/.env`:**
-```env
-OPENAI_API_KEY=sk-your-openai-api-key-here
-AI_MODEL=gpt-3.5-turbo
-PORT=3001
+**⚠️ Important Notes**: 
 
-# Optional: Railway deployment
-# RAILWAY_API_TOKEN=your-token
-# RAILWAY_TEMPLATE_ID=your-template-id
-```
+- **For deployed adapters**: Users must get their own `ABSINTHE_API_KEY` from the [Absinthe App Dashboard](https://app.absinthe.network/dashboard) - NOT from this `.env` file
+- Railway deployment is **disabled by default**. Set `ENABLE_RAILWAY_DEPLOYMENT=true` to enable automated deployment
+- `ETHERSCAN_API_KEY` is optional (only needed for auto fromBlock lookup on supported chains)
+- Manual Railway deployment is ALWAYS available, even without these env vars
 
-### 3. Run the Application
+#### 3. Run the Application
 
-**Terminal 1 - Backend:**
 ```bash
-cd api
-npm run dev
+pnpm dev  # or npm run dev
 ```
 
-**Terminal 2 - Frontend:**
-```bash
-npm run dev
-```
+Visit: **http://localhost:3000** 🎉
 
-Visit: **http://localhost:5173** 🎉
+The application runs both frontend and API routes from the same Next.js server.
 
 ## 📖 API Documentation
 
@@ -165,72 +187,91 @@ Deploy configuration to Railway.
 }
 ```
 
-## 🎨 Usage Flow
+## 🎨 User Flow
 
-### Step 1: Natural Language Input
-Type your requirement:
-```
-"I need a Uniswap V3 config for the USDC/ETH pool on Ethereum mainnet"
-```
+### Step 1: Select Adapter Type
+Choose from:
+- **ERC20 Holdings**: Track token balances
+- **Uniswap V2**: Track swaps and LP positions on V2 pools
+- **Uniswap V3**: Track swaps and positions on V3 pools
 
-### Step 2: Fill Dynamic Form
-The AI detects the adapter type and shows you a form with the required fields:
-- Pool Address
-- Token addresses
-- Chain ID
-- Block ranges
-- Pricing IDs
+### Step 2: Fill the Form
+Enter the required fields:
+- Contract/Pool address
+- Chain ID (auto-detects gateway URL)
+- From Block (auto-detected for most chains)
+- Optional: pricing overrides
 
 ### Step 3: Generate & Deploy
-- Review the generated JSON configuration
-- Copy JSON or Base64 encoded config
-- Deploy to Railway with one click
+Two options:
+1. **Generate Only**: Review the JSON/Base64 config, copy for manual use
+2. **Deploy to Railway**: 
+   - **Automated**: One-click deployment (if enabled)
+   - **Manual**: Step-by-step instructions with the official [Railway Deployment Guide](https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f)
+
+### Step 4: Configure & Verify
+After deployment:
+- Add your environment variables in Railway
+- Monitor deployment logs
+- Verify data in Absinthe dashboard
+
+> 📖 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions
 
 ## 📦 Deployment
 
-### Backend Deployment
+### Deploy Adapters to Railway
+
+For deploying **Absinthe adapters** (the configs this tool generates):
+
+> 📚 **Read the full guide**: [DEPLOYMENT.md](./DEPLOYMENT.md) or the official [Railway Deployment Process Manual](https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f)
+
+**Quick steps:**
+1. Generate your config using this app
+2. Click "Deploy to Railway (Manual)" for step-by-step instructions
+3. Follow the 7-step deployment process:
+   - Prepare your config
+   - Open Railway deployment page
+   - Start deployment
+   - Fill in environment variables (including API key from Absinthe app)
+   - Save configuration
+   - Deploy your indexer
+   - Verify successful deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
+
+### Deploy This Application
+
+To deploy **this config generator app** itself:
+
+#### Vercel (Recommended)
+```bash
+pnpm install -g vercel
+vercel
+```
+
+Set all environment variables in Vercel dashboard (same as `.env.local`).
 
 #### Railway
 ```bash
-cd api
 railway login
 railway init
 railway up
 ```
 
-Set environment variables in Railway dashboard:
-- `OPENAI_API_KEY`
-- `AI_MODEL` (optional)
-- `RAILWAY_API_TOKEN` (optional)
+Set all environment variables in Railway dashboard.
 
-#### Render
-1. Create new Web Service
-2. Root directory: `api`
-3. Build command: `npm install`
-4. Start command: `npm start`
-5. Add environment variables
+#### Other Platforms
+Any platform that supports Next.js:
+- Netlify
+- Render
+- AWS Amplify
+- Cloudflare Pages
 
-#### Vercel
-```bash
-cd api
-vercel
-```
+**Build Command**: `pnpm build`  
+**Start Command**: `pnpm start`  
+**Node Version**: 18+
 
-### Frontend Deployment
-
-#### Vercel
-```bash
-vercel
-```
-
-Set environment variable:
-- `VITE_API_BASE_URL` (your backend URL)
-
-#### Netlify
-```bash
-npm run build
-# Upload dist/ folder
-```
+Make sure to set all environment variables in your platform's dashboard.
 
 ## 🔧 Development
 

@@ -7,7 +7,58 @@ export interface ClassificationResult {
 export interface GenerateConfigResult {
   config: Record<string, unknown>;
   base64: string;
+  warnings?: string[];
+  errors?: string[];
+  token?: {
+    tokenAddress: string;
+    coingeckoId?: string | null;
+    tokenName?: string;
+    tokenSymbol?: string;
+    pricingType?: string;
+    usdPegValue?: number;
+  };
+  tokens?: {
+    token0: string;
+    token1: string;
+    token0CoingeckoId?: string | null;
+    token1CoingeckoId?: string | null;
+    token0PricingType?: string;
+    token1PricingType?: string;
+    token0UsdPegValue?: number;
+    token1UsdPegValue?: number;
+  };
 }
+
+// Manual pricing input for tokens without CoinGecko IDs
+export interface ManualPricing {
+  kind: 'pegged';
+  usdPegValue: number;
+}
+
+// Response when manual input is required
+export interface ManualInputRequired {
+  success: false;
+  requiresManualInput: true;
+  missingTokens: Array<{
+    address: string;
+    field: string;
+    reason: string;
+  }>;
+  message: string;
+  warnings?: string[];
+  errors?: string[];
+  tokens?: {
+    token0?: string;
+    token1?: string;
+    token0Found?: boolean;
+    token1Found?: boolean;
+  };
+  tokenAddress?: string;
+  suggestion?: string;
+}
+
+// API base URL - empty for Next.js (same origin)
+const getApiBaseUrl = () => '';
 
 /**
  * Base64 encode JSON config
@@ -188,7 +239,7 @@ export async function deployToRailway(
   chainId: number,
   templateId?: string
 ): Promise<{ success: boolean; message: string; projectId?: string; workflowId?: string; projectUrl?: string; error?: string }> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/deploy-railway`, {
@@ -223,7 +274,7 @@ export async function getPoolTokens(
   poolAddress: string,
   chainId: number
 ): Promise<{ success: boolean; token0?: string; token1?: string; error?: string }> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/get-pool-tokens`, {
@@ -253,6 +304,7 @@ export async function getPoolTokens(
 /**
  * Auto-generate complete Uniswap V2 config from pool address
  * Backend will fetch tokens, CoinGecko IDs, and create swap/LP entries
+ * If CoinGecko IDs are not found, returns ManualInputRequired response
  */
 export async function generateUniv2Config(
   poolAddress: string,
@@ -260,9 +312,11 @@ export async function generateUniv2Config(
   fromBlock?: number,
   toBlock?: number,
   finality?: number,
-  flushIntervalHours?: number
-): Promise<GenerateConfigResult> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  flushIntervalHours?: number,
+  token0ManualPricing?: ManualPricing,
+  token1ManualPricing?: ManualPricing
+): Promise<GenerateConfigResult | ManualInputRequired> {
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/generate-univ2-config`, {
@@ -277,6 +331,8 @@ export async function generateUniv2Config(
         toBlock,
         finality,
         flushIntervalHours,
+        token0ManualPricing,
+        token1ManualPricing,
       }),
     });
 
@@ -286,6 +342,12 @@ export async function generateUniv2Config(
     }
 
     const data = await response.json();
+    
+    // Check if manual input is required
+    if (data.requiresManualInput) {
+      return data as ManualInputRequired;
+    }
+    
     if (!data.success) {
       throw new Error(data.message || data.error || 'Failed to generate config');
     }
@@ -307,7 +369,7 @@ export async function getCoinGeckoId(
   tokenAddress: string,
   chainId: number
 ): Promise<{ success: boolean; coingeckoId?: string; tokenName?: string; tokenSymbol?: string; error?: string }> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/get-coingecko-id`, {
@@ -337,6 +399,7 @@ export async function getCoinGeckoId(
 /**
  * Auto-generate complete ERC20 config from token address
  * Backend will fetch CoinGecko ID and create token entry
+ * If CoinGecko ID is not found, returns ManualInputRequired response
  */
 export async function generateErc20Config(
   tokenContractAddress: string,
@@ -344,9 +407,10 @@ export async function generateErc20Config(
   fromBlock?: number,
   toBlock?: number,
   finality?: number,
-  flushIntervalHours?: number
-): Promise<GenerateConfigResult> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  flushIntervalHours?: number,
+  manualPricing?: ManualPricing
+): Promise<GenerateConfigResult | ManualInputRequired> {
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/generate-erc20-config`, {
@@ -361,6 +425,7 @@ export async function generateErc20Config(
         toBlock,
         finality,
         flushIntervalHours,
+        manualPricing,
       }),
     });
 
@@ -370,6 +435,12 @@ export async function generateErc20Config(
     }
 
     const data = await response.json();
+    
+    // Check if manual input is required
+    if (data.requiresManualInput) {
+      return data as ManualInputRequired;
+    }
+    
     if (!data.success) {
       throw new Error(data.message || data.error || 'Failed to generate config');
     }
@@ -387,6 +458,7 @@ export async function generateErc20Config(
 /**
  * Auto-generate complete Uniswap V3 config from pool address
  * Backend will fetch tokens, CoinGecko IDs, and create swap entries
+ * If CoinGecko IDs are not found, returns ManualInputRequired response
  */
 export async function generateUniv3Config(
   poolAddress: string,
@@ -394,9 +466,11 @@ export async function generateUniv3Config(
   fromBlock?: number,
   toBlock?: number,
   finality?: number,
-  flushIntervalHours?: number
-): Promise<GenerateConfigResult> {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+  flushIntervalHours?: number,
+  token0ManualPricing?: ManualPricing,
+  token1ManualPricing?: ManualPricing
+): Promise<GenerateConfigResult | ManualInputRequired> {
+  const API_BASE_URL = getApiBaseUrl();
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/generate-univ3-config`, {
@@ -411,6 +485,8 @@ export async function generateUniv3Config(
         toBlock,
         finality,
         flushIntervalHours,
+        token0ManualPricing,
+        token1ManualPricing,
       }),
     });
 
@@ -420,6 +496,12 @@ export async function generateUniv3Config(
     }
 
     const data = await response.json();
+    
+    // Check if manual input is required
+    if (data.requiresManualInput) {
+      return data as ManualInputRequired;
+    }
+    
     if (!data.success) {
       throw new Error(data.message || data.error || 'Failed to generate config');
     }
