@@ -29,6 +29,10 @@ export const DeploymentDialog = ({ base64Config, chainId, onDeploy, isDeploying 
   const [copied, setCopied] = useState(false);
   const [isAutoDeploying, setIsAutoDeploying] = useState(false);
   const { toast } = useToast();
+  
+  // Get Notion documentation URL from environment variable
+  const notionDocUrl = process.env.NEXT_PUBLIC_RAILWAY_DEPLOYMENT_DOC_URL || 
+    "https://absinthelabs.notion.site/Deploy-Prebuilt-Adapters-on-Railway-2eadfbd9a9588019813ed3f586ced212?pvs=74";
 
   const handleOpenRailway = () => {
     window.open("https://railway.com/deploy/zonal-gentleness", "_blank");
@@ -118,7 +122,7 @@ export const DeploymentDialog = ({ base64Config, chainId, onDeploy, isDeploying 
               Follow these steps to deploy your adapter configuration to Railway. 
               For detailed documentation, see the{" "}
               <a 
-                href="https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f" 
+                href={notionDocUrl} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-primary hover:underline inline-flex items-center gap-1"
@@ -164,40 +168,31 @@ export const DeploymentDialog = ({ base64Config, chainId, onDeploy, isDeploying 
                     <li>What happens after deploy? (verification + where to look)</li>
                   </ul>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     className="mt-2"
-                    onClick={() => window.open("https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f", "_blank")}
+                    onClick={() => window.open(notionDocUrl, "_blank")}
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
-                    Read Full Documentation
+                    Open Full Documentation
                   </Button>
                 </div>
               </div>
             </div>
 
-            {/* Step 1: Prepare Config */}
+            {/* Step 1: Copy Config */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-semibold">
                   1
                 </div>
-                <h3 className="font-semibold">Prepare Your Config</h3>
+                <h3 className="font-semibold">Copy Your Generated Configuration</h3>
               </div>
               <p className="text-sm text-muted-foreground ml-8">
-                Make sure your config file is correctly set up. Refer to the{" "}
-                <a 
-                  href="https://www.notion.so/Config-Setup-Lite-Document-2a0dfbd9a95880e69277e273059d015c" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Config Setup Documentation
-                </a>
-                {" "}for detailed guidance.
+                Copy the Base64-encoded configuration below. You'll need to paste this into Railway in Step 4.
               </p>
               <div className="ml-8 p-3 bg-muted rounded-md">
-                <p className="text-xs text-muted-foreground mb-2">Your generated config (Base64):</p>
+                <p className="text-xs text-muted-foreground mb-2">Your generated configuration (Base64):</p>
                 <div className="relative">
                   <Textarea
                     value={base64Config}
@@ -393,7 +388,7 @@ export const DeploymentDialog = ({ base64Config, chainId, onDeploy, isDeploying 
               <p className="text-sm text-blue-900 dark:text-blue-100">
                 <strong>Need help?</strong> Read the{" "}
                 <a 
-                  href="https://absinthelabs.notion.site/Railway-Deployment-Process-Manual-2a0dfbd9a95880ca8c62f7a6d0fd490f" 
+                  href={notionDocUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="underline hover:no-underline"
