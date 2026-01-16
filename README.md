@@ -94,6 +94,9 @@ COINGECKO_API_KEY=your_coingecko_api_key
 
 # Etherscan API Key (optional - for auto fromBlock lookup)
 ETHERSCAN_API_KEY=your_etherscan_api_key
+
+# Railway Deployment Documentation URL (optional - defaults to official Notion page)
+NEXT_PUBLIC_RAILWAY_DEPLOYMENT_DOC_URL=https://absinthelabs.notion.site/Deploy-Prebuilt-Adapters-on-Railway-2eadfbd9a9588019813ed3f586ced212?pvs=74
 ```
 
 **⚠️ Important Notes**: 
