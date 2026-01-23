@@ -28,6 +28,7 @@ const generateUniv3ConfigSchema = z.object({
   flushIntervalHours: z.number().min(1).optional().default(48),
   token0ManualPricing: tokenPricingSchema.optional(),
   token1ManualPricing: tokenPricingSchema.optional(),
+  trackables: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -219,6 +220,36 @@ export async function POST(request: NextRequest) {
     const gatewayUrl = CHAIN_ID_TO_GATEWAY_URL[body.chainId];
     const flushInterval = `${body.flushIntervalHours || 48}h`;
 
+    // Determine which trackables to include (default to all if not specified)
+    const selectedTrackables = body.trackables || ['swap'];
+    const includeSwap = selectedTrackables.includes('swap');
+
+    const adapterConfigContent: any = {};
+
+    // Only include swap trackable if selected
+    if (includeSwap) {
+      adapterConfigContent.swap = [
+        {
+          params: {
+            factoryAddress: factoryAddress,
+            nonFungiblePositionManagerAddress: positionManagerAddress,
+            poolAddress: body.poolAddress,
+          },
+          assetSelectors: { swapLegAddress: token0 },
+          pricing: token0Pricing,
+        },
+        {
+          params: {
+            factoryAddress: factoryAddress,
+            nonFungiblePositionManagerAddress: positionManagerAddress,
+            poolAddress: body.poolAddress,
+          },
+          assetSelectors: { swapLegAddress: token1 },
+          pricing: token1Pricing,
+        },
+      ];
+    }
+
     const config = {
       chainArch: 'evm',
       flushInterval: flushInterval,
@@ -246,28 +277,7 @@ export async function POST(request: NextRequest) {
       },
       adapterConfig: {
         adapterId: 'uniswap-v3',
-        config: {
-          swap: [
-            {
-              params: {
-                factoryAddress: factoryAddress,
-                nonFungiblePositionManagerAddress: positionManagerAddress,
-                poolAddress: body.poolAddress,
-              },
-              assetSelectors: { swapLegAddress: token0 },
-              pricing: token0Pricing,
-            },
-            {
-              params: {
-                factoryAddress: factoryAddress,
-                nonFungiblePositionManagerAddress: positionManagerAddress,
-                poolAddress: body.poolAddress,
-              },
-              assetSelectors: { swapLegAddress: token1 },
-              pricing: token1Pricing,
-            },
-          ],
-        },
+        config: adapterConfigContent,
       },
     };
 

@@ -494,48 +494,11 @@ export const AdapterForm = ({ adapterType, schema, fields, onSubmit, onGenerateA
                 disabled={isLoading || isDeploying}
                 variant="default"
               >
-                {isLoading ? "Generating..." : "Generate Config"}
+                Next: Select Trackables
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                Generate configuration file. You can review and deploy manually later.
+                Continue to choose which trackables to include in your adapter configuration.
               </p>
-              
-              {onGenerateAndDeploy && (
-                <>
-                  <Button 
-                    type="button"
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      // Validate form first
-                      const isValid = await form.trigger();
-                      if (!isValid) {
-                        return;
-                      }
-                      const formData = form.getValues();
-                      // Transform data same as handleSubmit
-                      if (formData.flushIntervalHours !== undefined) {
-                        formData.flushInterval = `${formData.flushIntervalHours}h`;
-                        delete formData.flushIntervalHours;
-                      }
-                      if (!formData.gatewayUrl && formData.chainId) {
-                        const gatewayUrl = getGatewayUrlForChainId(formData.chainId);
-                        if (gatewayUrl) {
-                          formData.gatewayUrl = gatewayUrl;
-                        }
-                      }
-                      onGenerateAndDeploy(formData);
-                    }}
-                    className="w-full" 
-                    disabled={isLoading || isDeploying}
-                    variant="outline"
-                  >
-                    {isDeploying ? "Deploying..." : isLoading ? "Generating..." : "Generate Config & Deploy to Railway"}
-                  </Button>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Generate configuration and automatically deploy to Railway. Fastest way to get started.
-                  </p>
-                </>
-              )}
             </div>
           </form>
         </Form>

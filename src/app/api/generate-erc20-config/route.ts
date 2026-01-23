@@ -23,6 +23,7 @@ const generateErc20ConfigSchema = z.object({
     kind: z.literal('pegged'),
     usdPegValue: z.number().min(0, "USD peg value must be non-negative"),
   }).optional(),
+  trackables: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -134,6 +135,27 @@ export async function POST(request: NextRequest) {
     const gatewayUrl = CHAIN_ID_TO_GATEWAY_URL[body.chainId];
     const flushInterval = `${body.flushIntervalHours || 1}h`;
 
+    // Determine which trackables to include (default to all if not specified)
+    const selectedTrackables = body.trackables || ['token'];
+    const includeToken = selectedTrackables.includes('token');
+
+    const adapterConfig: any = {
+      adapterId: 'erc20-holdings',
+      config: {},
+    };
+
+    // Only include token trackable if selected
+    if (includeToken) {
+      adapterConfig.config.token = [
+        {
+          params: {
+            contractAddress: body.tokenContractAddress,
+          },
+          pricing: pricing,
+        },
+      ];
+    }
+
     const config = {
       chainArch: 'evm',
       flushInterval: flushInterval,
@@ -159,19 +181,7 @@ export async function POST(request: NextRequest) {
         ...(fromBlock !== undefined && { fromBlock }),
         ...(body.toBlock !== undefined && { toBlock: body.toBlock }),
       },
-      adapterConfig: {
-        adapterId: 'erc20-holdings',
-        config: {
-          token: [
-            {
-              params: {
-                contractAddress: body.tokenContractAddress,
-              },
-              pricing: pricing,
-            },
-          ],
-        },
-      },
+      adapterConfig,
     };
 
     // Step 3: Encode to base64

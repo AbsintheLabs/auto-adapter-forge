@@ -2,7 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 
-type Stage = "template" | "form" | "output";
+type Stage = "template" | "form" | "trackables" | "output";
 
 interface ProgressIndicatorProps {
   currentStage: Stage;
@@ -11,7 +11,8 @@ interface ProgressIndicatorProps {
 const STAGES = [
   { id: "template" as const, label: "Template", number: 1 },
   { id: "form" as const, label: "Configure", number: 2 },
-  { id: "output" as const, label: "Deploy", number: 3 },
+  { id: "trackables" as const, label: "Trackables", number: 3 },
+  { id: "output" as const, label: "Deploy", number: 4 },
 ];
 
 export const ProgressIndicator = ({ currentStage }: ProgressIndicatorProps) => {
