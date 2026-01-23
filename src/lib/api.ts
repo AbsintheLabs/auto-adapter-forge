@@ -314,7 +314,8 @@ export async function generateUniv2Config(
   finality?: number,
   flushIntervalHours?: number,
   token0ManualPricing?: ManualPricing,
-  token1ManualPricing?: ManualPricing
+  token1ManualPricing?: ManualPricing,
+  trackables?: string[]
 ): Promise<GenerateConfigResult | ManualInputRequired> {
   const API_BASE_URL = getApiBaseUrl();
   
@@ -333,6 +334,7 @@ export async function generateUniv2Config(
         flushIntervalHours,
         token0ManualPricing,
         token1ManualPricing,
+        trackables,
       }),
     });
 
@@ -355,6 +357,8 @@ export async function generateUniv2Config(
     return {
       config: data.config,
       base64: data.base64,
+      warnings: data.warnings,
+      errors: data.errors,
     };
   } catch (error) {
     console.error("Generate UniV2 config error:", error);
@@ -408,7 +412,8 @@ export async function generateErc20Config(
   toBlock?: number,
   finality?: number,
   flushIntervalHours?: number,
-  manualPricing?: ManualPricing
+  manualPricing?: ManualPricing,
+  trackables?: string[]
 ): Promise<GenerateConfigResult | ManualInputRequired> {
   const API_BASE_URL = getApiBaseUrl();
   
@@ -426,6 +431,7 @@ export async function generateErc20Config(
         finality,
         flushIntervalHours,
         manualPricing,
+        trackables,
       }),
     });
 
@@ -448,6 +454,8 @@ export async function generateErc20Config(
     return {
       config: data.config,
       base64: data.base64,
+      warnings: data.warnings,
+      errors: data.errors,
     };
   } catch (error) {
     console.error("Generate ERC20 config error:", error);
@@ -468,7 +476,8 @@ export async function generateUniv3Config(
   finality?: number,
   flushIntervalHours?: number,
   token0ManualPricing?: ManualPricing,
-  token1ManualPricing?: ManualPricing
+  token1ManualPricing?: ManualPricing,
+  trackables?: string[]
 ): Promise<GenerateConfigResult | ManualInputRequired> {
   const API_BASE_URL = getApiBaseUrl();
   
@@ -487,6 +496,7 @@ export async function generateUniv3Config(
         flushIntervalHours,
         token0ManualPricing,
         token1ManualPricing,
+        trackables,
       }),
     });
 
@@ -509,6 +519,8 @@ export async function generateUniv3Config(
     return {
       config: data.config,
       base64: data.base64,
+      warnings: data.warnings,
+      errors: data.errors,
     };
   } catch (error) {
     console.error("Generate UniV3 config error:", error);

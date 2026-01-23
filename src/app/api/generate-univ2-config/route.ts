@@ -26,6 +26,7 @@ const generateUniv2ConfigSchema = z.object({
   flushIntervalHours: z.number().min(1).optional().default(2),
   token0ManualPricing: tokenPricingSchema.optional(),
   token1ManualPricing: tokenPricingSchema.optional(),
+  trackables: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -204,6 +205,43 @@ export async function POST(request: NextRequest) {
     const gatewayUrl = CHAIN_ID_TO_GATEWAY_URL[body.chainId];
     const flushInterval = `${body.flushIntervalHours || 2}h`;
 
+    // Determine which trackables to include (default to all if not specified)
+    const selectedTrackables = body.trackables || ['swap', 'lp'];
+    const includeSwap = selectedTrackables.includes('swap');
+    const includeLp = selectedTrackables.includes('lp');
+
+    const adapterConfigContent: any = {};
+
+    // Only include swap trackable if selected
+    if (includeSwap) {
+      adapterConfigContent.swap = [
+        {
+          params: { poolAddress: body.poolAddress },
+          assetSelectors: { swapLegAddress: token0 },
+          pricing: token0Pricing,
+        },
+        {
+          params: { poolAddress: body.poolAddress },
+          assetSelectors: { swapLegAddress: token1 },
+          pricing: token1Pricing,
+        },
+      ];
+    }
+
+    // Only include lp trackable if selected
+    if (includeLp) {
+      adapterConfigContent.lp = [
+        {
+          params: { poolAddress: body.poolAddress },
+          pricing: {
+            kind: 'univ2nav',
+            token0: token0Pricing,
+            token1: token1Pricing,
+          },
+        },
+      ];
+    }
+
     const config = {
       chainArch: 'evm',
       flushInterval: flushInterval,
@@ -231,30 +269,7 @@ export async function POST(request: NextRequest) {
       },
       adapterConfig: {
         adapterId: 'uniswap-v2',
-        config: {
-          swap: [
-            {
-              params: { poolAddress: body.poolAddress },
-              assetSelectors: { swapLegAddress: token0 },
-              pricing: token0Pricing,
-            },
-            {
-              params: { poolAddress: body.poolAddress },
-              assetSelectors: { swapLegAddress: token1 },
-              pricing: token1Pricing,
-            },
-          ],
-          lp: [
-            {
-              params: { poolAddress: body.poolAddress },
-              pricing: {
-                kind: 'univ2nav',
-                token0: token0Pricing,
-                token1: token1Pricing,
-              },
-            },
-          ],
-        },
+        config: adapterConfigContent,
       },
     };
 

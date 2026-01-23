@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AdapterForm } from "@/components/AdapterForm";
 import { ConfigOutput } from "@/components/ConfigOutput";
 import { TemplateSelection } from "@/components/TemplateSelection";
+import { TrackableSelection } from "@/components/TrackableSelection";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { ManualPricingDialog } from "@/components/ManualPricingDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +37,7 @@ const ADAPTER_CONFIG = {
   "uniswap-v3": { schema: univ3Schema, fields: univ3Fields },
 };
 
-type Stage = "template" | "form" | "output";
+type Stage = "template" | "form" | "trackables" | "output";
 
 export default function Home() {
   const [stage, setStage] = useState<Stage>("template");
@@ -53,6 +54,10 @@ export default function Home() {
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [isDeployAfterManual, setIsDeployAfterManual] = useState(false);
   
+  // Trackable selection state
+  const [submittedFormData, setSubmittedFormData] = useState<any>(null);
+  const [selectedTrackables, setSelectedTrackables] = useState<string[]>([]);
+  
   // Check if Railway deployment is enabled
   const { enabled: railwayEnabled, loading: railwayLoading } = useRailwayEnabled();
 
@@ -67,7 +72,7 @@ export default function Home() {
     return 'requiresManualInput' in result && result.requiresManualInput === true;
   };
 
-  // Stage 2: Handle form submission (generate config only)
+  // Stage 2: Handle form submission (move to trackable selection)
   const handleFormSubmit = async (formData: any, manualPricing?: {
     manualPricing?: ManualPricing;
     token0ManualPricing?: ManualPricing;
@@ -75,7 +80,18 @@ export default function Home() {
   }) => {
     if (!selectedTemplate) return;
 
+    // Store form data and move to trackable selection
+    setSubmittedFormData({ ...formData, manualPricing });
+    setStage("trackables");
+  };
+
+  // Stage 3: Handle trackable selection and generate config
+  const handleTrackableConfirm = async (trackables: string[]) => {
+    if (!selectedTemplate || !submittedFormData) return;
+
+    setSelectedTrackables(trackables);
     setIsGenerating(true);
+    
     // Show message about potential API limit delays
     toast({
       title: "Generating Config",
@@ -84,6 +100,8 @@ export default function Home() {
     
     try {
       const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
+      const formData = submittedFormData;
+      const manualPricing = formData.manualPricing;
       let result: GenerateConfigResult | ManualInputRequired;
       
       if (adapterType === 'uniswap-v2') {
@@ -96,7 +114,8 @@ export default function Home() {
           formData.finality,
           formData.flushIntervalHours,
           manualPricing?.token0ManualPricing,
-          manualPricing?.token1ManualPricing
+          manualPricing?.token1ManualPricing,
+          trackables
         );
       } else if (adapterType === 'uniswap-v3') {
         // For Uniswap V3, use backend to auto-generate config
@@ -108,7 +127,8 @@ export default function Home() {
           formData.finality,
           formData.flushIntervalHours,
           manualPricing?.token0ManualPricing,
-          manualPricing?.token1ManualPricing
+          manualPricing?.token1ManualPricing,
+          trackables
         );
       } else {
         // For ERC20, use backend API to generate config (auto-fetches CoinGecko ID)
@@ -119,7 +139,8 @@ export default function Home() {
           formData.toBlock,
           formData.finality,
           formData.flushIntervalHours,
-          manualPricing?.manualPricing
+          manualPricing?.manualPricing,
+          trackables
         );
       }
       
@@ -150,106 +171,20 @@ export default function Home() {
     }
   };
 
-  // Stage 2: Handle generate and deploy (combined action)
+  // Handle back from trackable selection
+  const handleTrackableBack = () => {
+    setStage("form");
+  };
+
+  // Handle generate and deploy - move to trackable selection first
   const handleGenerateAndDeploy = async (formData: any, manualPricing?: {
     manualPricing?: ManualPricing;
     token0ManualPricing?: ManualPricing;
     token1ManualPricing?: ManualPricing;
   }) => {
-    if (!selectedTemplate) return;
-
-    setIsGenerateAndDeploy(true);
-    // Show message about potential API limit delays
-    toast({
-      title: "Generating & Deploying",
-      description: "This may take longer if API limits are hit for fromBlock check...",
-    });
-    
-    try {
-      const adapterType = selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3';
-      let result: GenerateConfigResult | ManualInputRequired;
-      
-      // Step 1: Generate config
-      if (adapterType === 'uniswap-v2') {
-        result = await generateUniv2Config(
-          formData.poolAddress,
-          formData.chainId,
-          formData.fromBlock,
-          formData.toBlock,
-          formData.finality,
-          formData.flushIntervalHours,
-          manualPricing?.token0ManualPricing,
-          manualPricing?.token1ManualPricing
-        );
-      } else if (adapterType === 'uniswap-v3') {
-        result = await generateUniv3Config(
-          formData.poolAddress,
-          formData.chainId,
-          formData.fromBlock,
-          formData.toBlock,
-          formData.finality,
-          formData.flushIntervalHours,
-          manualPricing?.token0ManualPricing,
-          manualPricing?.token1ManualPricing
-        );
-      } else {
-        result = await generateErc20Config(
-          formData.tokenContractAddress,
-          formData.chainId,
-          formData.fromBlock,
-          formData.toBlock,
-          formData.finality,
-          formData.flushIntervalHours,
-          manualPricing?.manualPricing
-        );
-      }
-
-      // Check if manual input is required
-      if (isManualInputRequired(result)) {
-        setManualInputData(result);
-        setPendingFormData(formData);
-        setIsDeployAfterManual(true);
-        setShowManualPricingDialog(true);
-        setIsGenerateAndDeploy(false);
-        return;
-      }
-
-      // Step 2: Deploy to Railway
-      const chainId = (result.config as any)?.network?.chainId;
-      if (!chainId) {
-        throw new Error("Chain ID not found in configuration");
-      }
-
-      const deployResult = await deployToRailway(
-        result.base64,
-        chainId
-      );
-      
-      if (deployResult.success) {
-        setGeneratedConfig(result);
-        toast({
-          title: "Deployment Successful",
-          description: deployResult.projectUrl 
-            ? `Project deployed! Opening Railway...`
-            : deployResult.message || `Project ID: ${deployResult.projectId}`,
-        });
-        // Open Railway project directly in new tab
-        if (deployResult.projectUrl) {
-          window.open(deployResult.projectUrl, '_blank');
-        }
-        // Don't navigate to output stage - user is going directly to Railway
-      } else {
-        throw new Error(deployResult.message || "Deployment failed");
-      }
-    } catch (error) {
-      toast({
-        title: "Generation & Deployment Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerateAndDeploy(false);
-    }
+    // For now, just move to trackable selection like regular submission
+    // The deploy will happen from the output stage
+    handleFormSubmit(formData, manualPricing);
   };
   
   // Handle manual pricing submission
@@ -261,11 +196,8 @@ export default function Home() {
     setShowManualPricingDialog(false);
     
     if (pendingFormData) {
-      if (isDeployAfterManual) {
-        handleGenerateAndDeploy(pendingFormData, pricing);
-      } else {
-        handleFormSubmit(pendingFormData, pricing);
-      }
+      // Move to trackable selection after manual pricing
+      handleFormSubmit(pendingFormData, pricing);
     }
   };
   
@@ -397,7 +329,26 @@ export default function Home() {
           </div>
         )}
 
-        {/* Stage 3: Config Output */}
+        {/* Stage 3: Trackable Selection */}
+        {stage === "trackables" && selectedTemplate && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">Configure Trackables</h2>
+              <Button variant="outline" onClick={handleReset}>
+                Start Over
+              </Button>
+            </div>
+            
+            <TrackableSelection
+              adapterType={selectedTemplate as 'erc20' | 'uniswap-v2' | 'uniswap-v3'}
+              onConfirm={handleTrackableConfirm}
+              onBack={handleTrackableBack}
+              isLoading={isGenerating}
+            />
+          </div>
+        )}
+
+        {/* Stage 4: Config Output */}
         {stage === "output" && generatedConfig && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
